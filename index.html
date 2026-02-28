@@ -3,25 +3,22 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-    <title>ComfyUI 终极提示词解析器 (v3.1)</title>
+    <title>ComfyUI 终极提示词解析器 (v3)</title>
     <style>
         :root {
-            --bg-color: #20232a; /* 更深一点的背景 */
-            --text-color: #cdd9e5;
-            --text-dim: #768390;
-            --primary-color: #539bf5; /* Github 蓝 */
-            --accent-color: #444c56;
-            --card-bg-color: #2d333b;
-            --card-border: #444c56;
-            --pre-bg-color: #22272e;
-            --success-color: #57ab5a;
-            --error-color: #e5534b;
-            --btn-hover: #373e47;
-            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+            --bg-color: #282c34;
+            --text-color: #abb2bf;
+            --primary-color: #61afef;
+            --border-color: #3e4451;
+            --card-bg-color: #21252b;
+            --pre-bg-color: #1c1f24;
+            --success-color: #98c379;
+            --error-color: #e06c75;
+            --warning-color: #e5c07b;
         }
         
+        /* 西文字体设置为Century Gothic */
         * {
-            box-sizing: border-box;
             font-family: "Century Gothic", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
         
@@ -34,248 +31,186 @@
             justify-content: center;
             min-height: 100vh;
             position: relative;
-            overflow-y: scroll; /* 防止滚动条跳动 */
         }
-
-        /* 滚动条美化 */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg-color); }
-        ::-webkit-scrollbar-thumb { background: var(--accent-color); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
-
         .container { 
-            max-width: 900px; 
+            max-width: 1000px; 
             width: 100%; 
-            margin: 3em 1em;
+            margin: 2em 0;
             position: relative;
             z-index: 10;
-            padding-bottom: 50px;
         }
-
         h1 { 
             color: var(--primary-color); 
             text-align: center; 
-            margin-bottom: 1.5em; 
-            font-weight: normal;
-            letter-spacing: 1px;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            margin-bottom: 1em; 
         }
 
-        /* 拖拽区域美化 */
         #drop-zone {
-            border: 2px dashed var(--accent-color);
-            background-color: rgba(45, 51, 59, 0.5);
-            border-radius: 16px;
-            padding: 60px 20px; 
+            border: 3px dashed var(--border-color);
+            border-radius: 10px;
+            padding: 50px 20px; 
             text-align: center; 
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.3s ease; 
             position: relative;
-            margin-bottom: 2em;
         }
-        #drop-zone:hover {
-            border-color: var(--primary-color);
-            background-color: var(--card-bg-color);
-            transform: translateY(-2px);
-        }
-        #drop-zone.dragover { 
-            border-color: var(--success-color); 
-            background-color: rgba(87, 171, 90, 0.1);
-            transform: scale(1.02);
-        }
-        #drop-zone p { 
-            margin: 0; 
-            font-size: 1.1em; 
-            color: var(--text-dim);
-            pointer-events: none;
-        }
-        #drop-zone strong {
-            color: var(--primary-color);
-            font-weight: normal;
-        }
+        #drop-zone.dragover { border-color: var(--primary-color); background-color: var(--card-bg-color); }
+        #drop-zone p { margin: 0; font-size: 1.2em; }
         #file-input { display: none; }
 
-        /* 全屏拖放遮罩 */
-        .side-drop-overlay {
+        /* 侧边拖放区域 */
+        .side-drop-zone {
             position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(4px);
-            z-index: 999;
+            top: 0;
+            bottom: 0;
+            width: calc((100vw - 1000px) / 2);
+            z-index: 5;
+            transition: all 0.3s ease;
             display: flex;
             align-items: center;
             justify-content: center;
             opacity: 0;
             pointer-events: none;
-            transition: opacity 0.2s ease;
-            border: 4px dashed var(--primary-color);
-            margin: 10px;
-            border-radius: 20px;
         }
-        body.drag-active .side-drop-overlay {
+        .side-drop-zone.left {
+            left: 0;
+        }
+        .side-drop-zone.right {
+            right: 0;
+        }
+        body.drag-active .side-drop-zone {
             opacity: 1;
             pointer-events: auto;
+            background-color: rgba(33, 37, 43, 0.8);
+            border: 3px dashed var(--primary-color);
         }
-        .side-drop-overlay .text {
-            font-size: 2em;
+        .side-drop-zone .drop-text {
+            font-size: 1.5em;
             color: var(--primary-color);
-            font-weight: bold;
+            text-align: center;
+            transform: rotate(90deg);
+            white-space: nowrap;
         }
 
-        /* 图片预览 */
-        #image-preview-container { 
-            text-align: center; 
-            margin: 2em 0; 
-            animation: fadeIn 0.5s ease;
-        }
-        #image-preview { 
-            max-width: 100%; 
-            max-height: 400px; 
-            border-radius: 12px; 
-            box-shadow: var(--shadow);
-            border: 1px solid var(--card-border); 
-        }
+        #image-preview-container { text-align: center; margin-bottom: 1.5em; }
+        #image-preview { max-width: 100%; max-height: 300px; border-radius: 8px; border: 2px solid var(--border-color); }
 
-        /* 结果区域 */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        #results-container { margin-top: 2em; }
         .sampler-block {
-            border: 1px solid var(--card-border);
-            border-radius: 16px; 
-            margin-bottom: 2.5em; 
-            padding: 24px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px; 
+            margin-bottom: 2em; 
+            padding: 1em;
             background-color: var(--card-bg-color);
-            box-shadow: var(--shadow);
-            animation: fadeIn 0.4s ease-out;
         }
         .sampler-title {
-            font-size: 1.1em; 
+            font-size: 1.2em; 
+            font-weight: bold; 
             color: var(--primary-color); 
-            margin-bottom: 1.5em;
-            padding-bottom: 0.8em;
-            border-bottom: 1px solid var(--card-border);
-            display: flex;
-            align-items: center;
-        }
-        .sampler-title::before {
-            content: '';
-            display: inline-block;
-            width: 4px;
-            height: 16px;
-            background: var(--primary-color);
-            margin-right: 10px;
-            border-radius: 2px;
+            margin-bottom: 1em;
         }
 
-        /* 卡片设计 */
+        .result-section { margin-bottom: 1.5em; }
+        .result-section h2 { 
+            margin: 0 0 0.5em 0; 
+            font-size: 1.1em; 
+        }
+        .result-section h2.positive { color: var(--success-color); }
+        .result-section h2.negative { color: var(--error-color); }
+        .result-section pre {
+            background-color: var(--pre-bg-color); 
+            padding: 1em; 
+            margin: 0;
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            font-size: 0.95em; 
+            line-height: 1.6;
+            border-radius: 5px; 
+            max-height: 250px; 
+            overflow-y: auto;
+        }
+
+        .hidden { display: none; }
+        #status-message { 
+            text-align: center; 
+            margin-top: 1em; 
+            font-size: 1em; 
+            min-height: 1.5em; 
+        }
+        #status-message.error { color: var(--error-color); }
+        #status-message.warning { color: var(--warning-color); }
+
+        /* 卡片与键值布局 */
         .section-card {
-            background-color: #22272e;
-            border: 1px solid #373e47;
+            border: 1px solid var(--border-color);
             border-radius: 8px; 
-            padding: 0; 
-            margin-bottom: 16px;
-            overflow: hidden;
+            background-color: var(--card-bg-color);
+            padding: 12px 12px 10px 12px; 
+            margin-bottom: 12px;
         }
         .section-card h3 {
-            margin: 0; 
-            padding: 10px 15px;
-            font-size: 0.95em; 
-            background-color: #2d333b;
-            color: var(--text-dim);
-            border-bottom: 1px solid #373e47;
+            margin: 0 0 8px 0; 
+            font-size: 1.05em; 
+            color: var(--primary-color);
             display: flex; 
             align-items: center; 
-            justify-content: space-between;
-            font-weight: normal;
+            gap: 8px;
         }
-        
-        .section-content {
-            padding: 12px 15px;
-        }
-
-        /* 键值对布局 */
         .kv {
             display: grid; 
-            grid-template-columns: minmax(100px, 140px) 1fr;
-            column-gap: 16px; 
+            grid-template-columns: 120px 1fr;
+            column-gap: 12px; 
             row-gap: 8px;
-            font-size: 0.95em;
         }
         .kv .label { 
-            color: var(--text-dim); 
-            text-align: right;
+            color: #c0c6d0; 
         }
         .kv .value { 
             color: var(--text-color); 
             word-break: break-word; 
+            white-space: normal;
             line-height: 1.4;
         }
-
-        /* 文本区域 */
-        pre {
-            background-color: transparent; 
-            padding: 0; 
-            margin: 0;
-            white-space: pre-wrap; 
-            word-wrap: break-word; 
-            font-size: 0.9em; 
-            line-height: 1.6;
-            color: var(--text-color);
-            font-family: Consolas, Monaco, "Courier New", monospace;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .section-content pre {
-            /* 给pre一点内边距，如果不在卡片里 */
-        }
-
-        /* 按钮样式 */
         .copy-btn {
-            font-size: 0.75em; 
-            background: rgba(255,255,255,0.05);
-            border: 1px solid var(--card-border); 
+            margin-left: auto; 
+            font-size: 0.85em; 
+            background: transparent;
+            border: 1px solid var(--border-color); 
             color: var(--text-color);
-            padding: 4px 10px; 
-            border-radius: 20px; 
+            padding: 2px 8px; 
+            border-radius: 6px; 
             cursor: pointer;
-            transition: all 0.2s;
         }
-        .copy-btn:hover { 
-            border-color: var(--primary-color); 
-            color: var(--bg-color);
-            background-color: var(--primary-color);
+        .copy-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        
+        /* 确保所有文本元素使用Century Gothic字体 */
+        button, input, textarea, select {
+            font-family: inherit;
         }
-
-        /* 状态消息 */
-        #status-message { 
-            text-align: center; 
-            margin: 1em 0; 
-            font-size: 0.95em; 
-            min-height: 1.5em; 
-            opacity: 0;
-            transition: opacity 0.3s;
+        
+        /* 确保pre标签内的文本也能正确换行 */
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
-        #status-message.show { opacity: 1; }
-        #status-message.error { color: var(--error-color); }
-        #status-message.success { color: var(--success-color); }
-
-        .hidden { display: none; }
     </style>
 </head>
 <body>
+<!-- 左侧拖放区域 -->
+<div class="side-drop-zone left">
+    <div class="drop-text">拖放图片到此处</div>
+</div>
 
-<!-- 全屏拖放遮罩 -->
-<div class="side-drop-overlay">
-    <div class="text">释放以解析图片</div>
+<!-- 右侧拖放区域 -->
+<div class="side-drop-zone right">
+    <div class="drop-text">拖放图片到此处</div>
 </div>
 
 <div class="container">
-    <h1>ComfyUI 终极提示词解析器</h1>
+    <h1>ComfyUI 终极提示词解析器 (v3)</h1>
 
     <div id="drop-zone">
-        <p>拖拽 PNG 图片到此处，或 <strong>点击上传</strong></p>
+        <p>将 PNG 文件拖拽到此处，或点击选择文件</p>
         <input type="file" id="file-input" accept="image/png">
     </div>
 
@@ -298,76 +233,84 @@ const resultsContainer = document.getElementById('results-container');
 const statusMessage = document.getElementById('status-message');
 const body = document.body;
 
-/* ===== 事件监听 ===== */
+/* ===== 事件 ===== */
 dropZone.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
 
-// 全局拖放
-let dragCounter = 0;
-document.addEventListener('dragenter', (e) => {
+// 全局拖放事件处理
+document.addEventListener('dragover', (e) => {
     e.preventDefault();
-    dragCounter++;
     body.classList.add('drag-active');
 });
+
 document.addEventListener('dragleave', (e) => {
-    dragCounter--;
-    if (dragCounter === 0) {
+    // 只有当鼠标离开整个文档时才移除样式
+    if (e.clientX <= 0 || e.clientX >= window.innerWidth || 
+        e.clientY <= 0 || e.clientY >= window.innerHeight) {
         body.classList.remove('drag-active');
     }
 });
-document.addEventListener('dragover', (e) => e.preventDefault());
+
 document.addEventListener('drop', (e) => {
     e.preventDefault();
-    dragCounter = 0;
     body.classList.remove('drag-active');
     handleFiles(e.dataTransfer.files);
 });
 
-/* ===== 核心功能 ===== */
+// 主拖放区域事件
+dropZone.addEventListener('dragover', (e) => { 
+    e.preventDefault(); 
+    dropZone.classList.add('dragover'); 
+});
+
+dropZone.addEventListener('dragleave', () => { 
+    dropZone.classList.remove('dragover'); 
+});
+
+dropZone.addEventListener('drop', (e) => { 
+    e.preventDefault(); 
+    dropZone.classList.remove('dragover'); 
+    handleFiles(e.dataTransfer.files); 
+});
+
 function resetUI() {
     resultsContainer.innerHTML = '';
     imagePreviewContainer.classList.add('hidden');
     setStatus('');
 }
-
 function setStatus(message, type = '') {
     statusMessage.textContent = message;
-    statusMessage.className = type ? `${type} show` : '';
+    statusMessage.className = type;
 }
-
 function prettyBytes(bytes) {
     if (typeof bytes !== 'number') return '未知';
     const units = ['B','KB','MB','GB','TB'];
     let i = 0, v = bytes;
     while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-    return `${v.toFixed(v < 10 && i > 0 ? 2 : 1)} ${units[i]}`;
+    const fixed = (v < 10 && i > 0) ? 2 : 1;
+    return `${v.toFixed(fixed)} ${units[i]}`;
 }
-
 function copyText(text) {
     if (!text) return;
     navigator.clipboard.writeText(text).then(() => {
-        setStatus('已复制', 'success'); 
-        setTimeout(() => setStatus(''), 1500);
+        setStatus('已复制到剪贴板'); setTimeout(() => setStatus(''), 1200);
     }).catch(() => setStatus('复制失败', 'error'));
 }
 
-/* ===== 文件处理 (自动模式) ===== */
+/* ===== 文件处理 ===== */
 async function handleFiles(files) {
     if (files.length === 0) return;
     const file = files[0];
-    
-    // 基本验证
     if (file.type !== 'image/png') {
-        // 虽然只限制PNG，但为了健壮性，若用户强行改后缀或拖入其他
-        setStatus('目前仅完美支持 PNG 格式。', 'error');
-        // 继续尝试解析，也许是改了后缀的JPG，但Metadata提取逻辑是针对PNG Chunk的，所以大概率失败
+        setStatus('错误: 请上传一个PNG格式的图片。', 'error');
+        return;
     }
 
     resetUI();
-    setStatus('正在解析...');
+    setStatus('正在解析图片...');
 
     try {
-        // 1. 预览
+        // 预览
         const reader = new FileReader();
         reader.onload = (e) => {
             imagePreview.src = e.target.result;
@@ -375,430 +318,580 @@ async function handleFiles(files) {
         };
         reader.readAsDataURL(file);
 
-        // 2. 解析 PNG 内部结构
+        // 读取 PNG 元数据
         const arrayBuffer = await file.arrayBuffer();
         const metadata = await extractPngMetadata(arrayBuffer);
 
-        // 3. 自动识别逻辑
-        const apiDataStr = metadata['prompt'] || metadata['workflow']; // ComfyUI raw json
-        const guiDataStr = metadata['workflow']; // ComfyUI UI json
-        const parametersStr = metadata['parameters'] || metadata['Comment']; // WebUI text
+        const apiDataStr = metadata['prompt'] || metadata['workflow'];
+        const guiDataStr = metadata['workflow'];
 
-        const sanitize = (str) => str.replace(/NaN/g, 'null'); // 修复 Python JSON 不兼容 NaN
-
-        if (apiDataStr) {
-            // ---> ComfyUI 模式
-            try {
-                const apiData = JSON.parse(sanitize(apiDataStr));
-                const guiData = guiDataStr ? JSON.parse(sanitize(guiDataStr)) : null;
-                parseAndDisplayComfy(apiData, guiData, { file, metadata });
-                setStatus('检测到 ComfyUI 工作流', 'success');
-            } catch (e) {
-                console.error(e);
-                setStatus('检测到 ComfyUI 数据但 JSON 解析失败', 'error');
-            }
-        } else if (parametersStr) {
-            // ---> WebUI 模式
-            parseAndDisplayWebUI(parametersStr, { file, metadata });
-            setStatus('检测到 WebUI 信息', 'success');
-        } else {
-            // ---> 无法识别
-            setStatus('图片中未包含有效的生成信息 (ComfyUI 或 WebUI)。可能是被压缩或strip了元数据。', 'error');
+        if (!apiDataStr) {
+            setStatus('错误: 在图片中未找到 ComfyUI 的工作流元数据。', 'error');
+            return;
         }
 
+        const sanitize = (str) => str.replace(/NaN/g, 'null');
+        const apiData = JSON.parse(sanitize(apiDataStr));
+        const guiData = guiDataStr ? JSON.parse(sanitize(guiDataStr)) : null;
+
+        parseAndDisplay(apiData, guiData, { file, metadata });
+        setStatus('解析成功！', 'success');
     } catch (err) {
-        console.error('解析错误:', err);
+        console.error('解析失败:', err);
         setStatus(`解析失败: ${err.message}`, 'error');
     }
 }
 
-/* ===== PNG 元数据提取 (二进制级) ===== */
+/* ===== PNG 元数据解析（含 IHDR） ===== */
 async function extractPngMetadata(arrayBuffer) {
     const dataView = new DataView(arrayBuffer);
-    if (dataView.getUint32(0) !== 0x89504E47) throw new Error('非有效 PNG 文件');
-    
+    // PNG signature
+    if (dataView.getUint32(0) !== 0x89504E47 || dataView.getUint32(4) !== 0x0D0A1A0A) {
+        throw new Error('不是一个有效的PNG文件。');
+    }
     let offset = 8;
     const td = new TextDecoder('utf-8');
     const metadata = {};
-    
     while (offset < dataView.byteLength) {
         const length = dataView.getUint32(offset);
-        const type = td.decode(new Uint8Array(arrayBuffer, offset + 4, 4));
-        const dataOffset = offset + 8;
-        
-        if (type === 'IHDR') {
-             const dv = new DataView(arrayBuffer, dataOffset, length);
-             metadata.__ihdr = {
-                 width: dv.getUint32(0),
-                 height: dv.getUint32(4),
-                 bitDepth: dv.getUint8(8),
-                 colorType: dv.getUint8(9),
-                 compression: dv.getUint8(10),
-                 filter: dv.getUint8(11),
-                 interlace: dv.getUint8(12)
-             };
-        } else if (type === 'tEXt') {
-            const chunk = new Uint8Array(arrayBuffer, dataOffset, length);
-            const sep = chunk.indexOf(0);
-            if (sep > 0) {
-                const key = td.decode(chunk.slice(0, sep));
-                const val = td.decode(chunk.slice(sep + 1));
-                metadata[key] = val;
+        const typeOffset = offset + 4;
+        const dataOffset = typeOffset + 4;
+        const crcOffset = dataOffset + length;
+        if (crcOffset > dataView.byteLength) break;
+
+        const type = td.decode(new Uint8Array(arrayBuffer, typeOffset, 4));
+
+        if (type === 'IHDR' && length === 13) {
+            const dv = new DataView(arrayBuffer, dataOffset, length);
+            const width = dv.getUint32(0);
+            const height = dv.getUint32(4);
+            const bitDepth = dv.getUint8(8);
+            const colorType = dv.getUint8(9);
+            const compression = dv.getUint8(10);
+            const filter = dv.getUint8(11);
+            const interlace = dv.getUint8(12);
+            metadata.__ihdr = { width, height, bitDepth, colorType, compression, filter, interlace };
+        }
+
+        // tEXt
+        if (type === 'tEXt') {
+            const chunkData = new Uint8Array(arrayBuffer, dataOffset, length);
+            const keywordEnd = chunkData.indexOf(0);
+            if (keywordEnd > 0) {
+                const keyword = td.decode(chunkData.slice(0, keywordEnd));
+                metadata[keyword] = td.decode(chunkData.slice(keywordEnd + 1));
             }
-        } else if (type === 'iTXt') {
-            // 简化版 iTXt 读取
-            const chunk = new Uint8Array(arrayBuffer, dataOffset, length);
+        }
+        // iTXt（部分工具会写）
+        if (type === 'iTXt') {
+            const chunkData = new Uint8Array(arrayBuffer, dataOffset, length);
+            // iTXt: keyword\0 compression_flag compression_method language_tag\0 translated_keyword\0 text
+            // 简化：尽量抓 keyword 和 text
             let p = 0;
-            const readStr = () => {
-                let start = p;
-                while(p < chunk.length && chunk[p] !== 0) p++;
-                const s = td.decode(chunk.slice(start, p));
-                p++;
+            const readNullTerm = () => {
+                const start = p;
+                while (p < chunkData.length && chunkData[p] !== 0) p++;
+                const s = td.decode(chunkData.slice(start, p));
+                p++; // skip null
                 return s;
             };
-            const keyword = readStr();
-            if (p + 2 <= chunk.length) {
-                const compFlag = chunk[p++];
-                p++; // method
-                readStr(); // lang
-                readStr(); // transKey
-                // 如果未压缩，直接读取剩余部分
-                if (compFlag === 0) {
-                    metadata[keyword] = td.decode(chunk.slice(p));
+            const keyword = readNullTerm();
+            if (p + 2 <= chunkData.length) {
+                const compFlag = chunkData[p++]; // 0/1
+                const compMethod = chunkData[p++]; // usually 0
+                // language_tag
+                const _lang = readNullTerm();
+                // translated_keyword
+                const _translated = readNullTerm();
+                // text (maybe compressed)
+                let text = '';
+                if (compFlag === 1) {
+                    // 压缩文本很少见，这里保守忽略压缩，避免引入依赖；只在未压缩时读取
+                    text = '';
+                } else {
+                    text = td.decode(chunkData.slice(p));
                 }
+                if (keyword) metadata[keyword] = text;
             }
-        } else if (type === 'IEND') {
-            break;
         }
-        
-        offset = dataOffset + length + 4; // +4 for CRC
+
+        offset = crcOffset + 4;
+        if (type === 'IEND') break;
     }
     return metadata;
 }
 
-/* ===== 核心配置：节点白名单与别名 ===== */
-const SAMPLER_WHITELIST = new Set([
-  'KSampler', 'KSamplerAdvanced', 'FaceDetailer', 'SamplerCustom', 'SamplerCustomAdvanced',
+/* ====== 采样器识别增强：别名/白名单/排除清单 ====== */
+
+// 白名单：明确属于"执行采样"的节点（含第三方）
+const SAMPLER_CLASS_WHITELIST = new Set([
+  // 核心
+  'KSampler', 'KSamplerAdvanced', 'FaceDetailer',
+  // Comfy Core 扩展执行器
+  'SamplerCustom', 'SamplerCustomAdvanced',
+  // Efficiency Nodes
   'KSampler (Efficient)', 'KSampler Adv. (Efficient)', 'KSampler SDXL (Eff.)',
-  'KSampler //Inspire', 'KSamplerPipe //Inspire', 'ImpactKSamplerBasicPipe', 
-  'easy kSampler','easy kSamplerLayerDiffusion','easy fullCascadeKSampler'
+  // Inspire Pack
+  'KSampler //Inspire', 'KSamplerAdvanced //Inspire', 'KSamplerPipe //Inspire', 'KSamplerAdvancedPipe //Inspire',
+  // Impact Pack 执行器
+  'ImpactKSamplerBasicPipe', 'ImpactKSamplerAdvancedBasicPipe', 'TwoAdvancedSamplersForMask',
+  // easy-use 系
+  'easy kSampler','easy fullkSampler','easy unSampler','easy kSamplerTiled','easy kSamplerCustom',
+  'easy kSamplerSDTurbo','easy kSamplerInpainting','easy kSamplerDownscaleUnet','easy kSamplerLayerDiffusion','easy fullCascadeKSampler',
+  // Essentials 变体
+  'KSamplerVariationsStochastic+','KSamplerVariationsWithNoise+',
+  // Lumina
+  'LuminaT2ISampler'
 ]);
+
+// 明确不是执行采样器（仅提供算法/配置/选择等）
+const SAMPLER_CLASS_EXCLUDE = new Set([
+  'SamplerDPMPP_2M_SDE','SamplerEulerAncestral','SamplerLMS','SamplerER_SDE','SamplerSASolver',
+  'SamplerDPMPP_SDE','SamplerLCMUpscale','SamplerDPMPP_3M_SDE','SamplerDPMAdaptative','SamplerDPMPP_2S_Ancestral','SamplerEulerAncestralCFGPP',
+  'KSamplerSelect','KSamplerProvider','KSamplerAdvancedProvider','TiledKSamplerProvider',
+  'FluxSamplerParams+','PlotParameters+','GemmaSampler','KSampler Config (rgthree)'
+]);
+
+// 输入别名
 const ALIASES = {
-  positive: ['positive','pos','conditioning','cond','c','prompt','text','positive_prompt','clip'],
-  negative: ['negative','neg','uncond','uc','negative_prompt'],
-  model: ['model','ckpt_name','model_name'],
-  latent: ['latent_image','samples','latent'],
-  pipe: ['pipe','basic_pipe','sdxl_pipe','ksampler'],
-  steps: ['steps','num_steps'],
-  cfg: ['cfg','cfg_scale'],
-  sampler: ['sampler_name','sampler'],
-  scheduler: ['scheduler','schedule'],
-  seed: ['seed','noise_seed'],
-  denoise: ['denoise','denoise_strength']
+  positive: [
+    'positive','pos','conditioning','cond','c','c_in','c_positive','clip_conds','prompt','prompt_text','positive_prompt','c_up'
+  ],
+  negative: [
+    'negative','neg','negative_conditioning','uncond','uc','c_in_neg','unprompt','negative_prompt','neg_prompt','ncond','c_down'
+  ],
+  model: [
+    'model','model_in','sd_model','base_model','unet','unet_model','model_unet','ckpt','ckpt_model'
+  ],
+  latent: [
+    'latent_image','latent','samples','sample','start_samples','initial_latent','noise','image_latent','x','z','latent_in'
+  ],
+  // Pipe/组合输入
+  pipe: [
+    'pipe','basic_pipe','sdxl_tuple','sdxl_pipe','sdxl','ksampler','ksampler_advanced','detailer_pipe','tuple'
+  ],
+  steps: [
+    'steps','n_steps','num_steps','step_count','sampling_steps','iters','k_steps'
+  ],
+  cfg: [
+    'cfg','cfg_scale','scale','guidance','guidance_scale','cfg_strength','w','g'
+  ],
+  sampler_name: [
+    'sampler_name','sampler','sampler_type','k_sampler','algorithm','algo','method','sampler_enum'
+  ],
+  scheduler: [
+    'scheduler','schedule','schedule_type','scheduler_type','sigmas','sigma_schedule','sigma_sampler','noise_schedule'
+  ],
+  seed: [
+    'seed','noise_seed','random_seed','rng','seed_in','sampler_seed','initial_seed','variation_seed','main_seed'
+  ],
+  denoise: [
+    'denoise','denoise_strength','strength','noise_strength'
+  ],
 };
 
-/* ===== 辅助函数 ===== */
-function resolveNode(id, apiData, muted) {
-    if (!id || muted.has(String(id))) return null;
-    return apiData[id];
+// 工具：是否有任一键
+function hasAnyKey(obj, keys) {
+  return keys.some(k => Object.prototype.hasOwnProperty.call(obj, k));
 }
-// 查找标量值（递归）
-function findValue(inputs, keys, apiData, muted, visited = new Set()) {
-    // 1. 直接在 inputs 里找
-    for (const k of keys) {
-        if (inputs[k] !== undefined && typeof inputs[k] !== 'object') return inputs[k];
+// 工具：找连线源节点
+function getLinkIdByAliases(inputs, aliasKeys) {
+  for (const k of aliasKeys) {
+    const v = inputs[k];
+    if (Array.isArray(v) && v.length && typeof v[0] === 'string') return v[0];
+  }
+  return null;
+}
+// 工具：取标量（含上游解析）
+function getScalarByAliases(inputs, aliasKeys, apiData, mutedNodes) {
+  for (const k of aliasKeys) {
+    if (!Object.prototype.hasOwnProperty.call(inputs, k)) continue;
+    const v = inputs[k];
+    if (typeof v === 'number' || typeof v === 'string') return v;
+    if (Array.isArray(v) && v.length && typeof v[0] === 'string') {
+      const resolved = resolveScalarFromNode(v[0], apiData, mutedNodes);
+      if (resolved != null) return resolved;
     }
-    // 2. 如果是引用，向上找
-    for (const k of keys) {
-        const val = inputs[k];
-        if (Array.isArray(val) && val.length > 0) {
-            // 这是一个连接 [id, slot]
-            return resolveValueFromNode(val[0], apiData, muted, visited);
+  }
+  return null;
+}
+// 解析上游数值
+function resolveScalarFromNode(nodeId, apiData, mutedNodes, visited = new Set()) {
+  if (!nodeId || visited.has(nodeId)) return null;
+  visited.add(nodeId);
+  if (mutedNodes.has(nodeId)) return null;
+  const node = apiData[nodeId];
+  if (!node) return null;
+
+  const ins = node.inputs || {};
+  // 常见数值键
+  const candidateKeys = ['value','val','number','float','int','strength','steps','cfg','cfg_scale','w','g'];
+  for (const key of candidateKeys) {
+    const vv = ins[key];
+    if (typeof vv === 'number' || typeof vv === 'string') return vv;
+  }
+  // 继续向上
+  const keys = Object.keys(ins).sort();
+  for (const key of keys) {
+    const v = ins[key];
+    if (Array.isArray(v) && v.length && typeof v[0] === 'string') {
+      const r = resolveScalarFromNode(v[0], apiData, mutedNodes, visited);
+      if (r != null) return r;
+    }
+  }
+  return null;
+}
+
+// 判断是否为"执行采样器"
+function isLikelySamplerNode(node) {
+  const cls = String(node.class_type || '');
+  if (SAMPLER_CLASS_EXCLUDE.has(cls)) return false;
+  if (SAMPLER_CLASS_WHITELIST.has(cls)) return true;
+
+  const inputs = node.inputs || {};
+  const looksLikeByName = /sampler/i.test(cls) || /detailer/i.test(cls) || /ksampler/i.test(cls);
+  const hasLatentish = hasAnyKey(inputs, ALIASES.latent) || hasAnyKey(inputs, ALIASES.pipe);
+  const hasPosOrNeg = hasAnyKey(inputs, ALIASES.positive) || hasAnyKey(inputs, ALIASES.negative);
+  const hasModelish = hasAnyKey(inputs, ALIASES.model);
+  const hasStepsOrCfg = hasAnyKey(inputs, ALIASES.steps) || hasAnyKey(inputs, ALIASES.cfg);
+
+  // 名称像采样器 且 有潜空间 或 管道；并且具备正/负 或 模型/步数/CFG 中的任意
+  if (looksLikeByName && hasLatentish && (hasPosOrNeg || hasModelish || hasStepsOrCfg)) return true;
+
+  // 兜底：核心类
+  if (cls === 'KSampler' || cls === 'KSamplerAdvanced') return true;
+
+  return false;
+}
+function detectActiveSamplers(apiData, mutedNodes) {
+  return Object.keys(apiData).filter(id => {
+    const n = apiData[id];
+    if (!n || mutedNodes.has(id)) return false;
+    return isLikelySamplerNode(n);
+  });
+}
+
+/* ===== 主逻辑 ===== */
+function parseAndDisplay(apiData, guiData, ctx = {}) {
+    const mutedNodes = new Set();
+    if (guiData && guiData.nodes) {
+        for (const node of guiData.nodes) {
+            if (node.mode === 2 || node.mode === 4) {
+                mutedNodes.add(String(node.id));
+            }
         }
-    }
-    return null;
-}
-function resolveValueFromNode(id, apiData, muted, visited) {
-    if (visited.has(id)) return null;
-    visited.add(id);
-    const node = resolveNode(id, apiData, muted);
-    if (!node) return null;
-    
-    // 尝试找常见的值类型的键
-    const valueKeys = ['value','val','number','float','int','seed','steps','cfg','text','string'];
-    for (const k of valueKeys) {
-        if (node.inputs[k] !== undefined && typeof node.inputs[k] !== 'object') return node.inputs[k];
-    }
-    // 继续向上递归（深度优先）
-    for (const v of Object.values(node.inputs)) {
-        if (Array.isArray(v) && v.length > 0) {
-            const res = resolveValueFromNode(v[0], apiData, muted, visited);
-            if (res != null) return res;
-        }
-    }
-    return null;
-}
-
-// 文本递归提取
-function recursiveText(nodeId, apiData, muted, visited = new Set()) {
-    if (visited.has(nodeId) || muted.has(String(nodeId))) return "";
-    visited.add(nodeId);
-    const node = apiData[nodeId];
-    if (!node) return "";
-    
-    // 如果节点本身有 text 字段
-    if (typeof node.inputs?.text === 'string') return node.inputs.text;
-    if (typeof node.inputs?.text_g === 'string') return node.inputs.text_g + (node.inputs.text_l ? "\n" + node.inputs.text_l : "");
-    if (typeof node.inputs?.string === 'string') return node.inputs.string;
-
-    // 递归输入
-    let texts = [];
-    Object.values(node.inputs).forEach(val => {
-        if (Array.isArray(val)) {
-            const t = recursiveText(val[0], apiData, muted, visited);
-            if (t) texts.push(t);
-        }
-    });
-    return texts.join('\n');
-}
-
-// 格式化提示词
-function cleanPrompt(text) {
-    if (!text) return "";
-    return text.split('\n').map(line => line.trim()).filter(Boolean).join('\n\n');
-}
-
-// 查找尺寸
-function findSize(nodeId, apiData, muted, visited = new Set()) {
-    if (visited.has(nodeId) || !nodeId) return null;
-    visited.add(nodeId);
-    const node = apiData[nodeId];
-    if (!node) return null;
-    
-    if (node.class_type === 'EmptyLatentImage' || node.inputs?.width) {
-        if (node.inputs.width && node.inputs.height) 
-            return { w: node.inputs.width, h: node.inputs.height };
-    }
-    // 递归
-    for (const v of Object.values(node.inputs)) {
-        if (Array.isArray(v)) {
-            const s = findSize(v[0], apiData, muted, visited);
-            if (s) return s;
-        }
-    }
-    return null;
-}
-
-// 查找 Model Name
-function findModel(nodeId, apiData, muted, visited = new Set()) {
-    if (visited.has(nodeId) || !nodeId) return null;
-    visited.add(nodeId);
-    const node = apiData[nodeId];
-    if (!node) return null;
-    
-    const keys = ['ckpt_name','model_name','checkpoint'];
-    for(const k of keys) if(node.inputs[k]) return node.inputs[k];
-
-    for (const v of Object.values(node.inputs)) {
-        if (Array.isArray(v)) {
-            const m = findModel(v[0], apiData, muted, visited);
-            if (m) return m;
-        }
-    }
-    return null;
-}
-
-/* ===== 渲染逻辑 (ComfyUI) ===== */
-function parseAndDisplayComfy(apiData, guiData, ctx) {
-    const muted = new Set();
-    if (guiData?.nodes) {
-        guiData.nodes.forEach(n => { if (n.mode === 2 || n.mode === 4) muted.add(String(n.id)); });
+    } else {
+        setStatus('警告: 未找到GUI工作流数据(workflow), 无法判断节点是否被禁用。', 'warning');
     }
 
-    // 寻找采样器
-    const samplers = Object.keys(apiData).filter(id => {
-        if (muted.has(id)) return false;
-        const type = apiData[id].class_type;
-        if (SAMPLER_WHITELIST.has(type)) return true;
-        // 启发式：名字像且有关键输入
-        if (/Sampler|Detailer/.test(type)) {
-            const keys = Object.keys(apiData[id].inputs);
-            return (keys.includes('model') || keys.includes('pipe') || keys.includes('basic_pipe')) && 
-                   (keys.includes('seed') || keys.includes('steps'));
-        }
-        return false;
-    });
-
-    if (samplers.length === 0) {
-        resultsContainer.innerHTML = '<div style="text-align:center;color:var(--text-dim)">未找到激活的采样器节点</div>';
+    // 识别更广的采样器
+    const activeSamplers = detectActiveSamplers(apiData, mutedNodes);
+    if (activeSamplers.length === 0) {
+        resultsContainer.innerHTML = '<div style="text-align:center; color: var(--error-color);">错误: 工作流中未找到任何 激活 的采样器节点。</div>';
         return;
     }
 
-    samplers.forEach((sid, idx) => {
-        const node = apiData[sid];
-        const ins = node.inputs;
-        
-        // 提取数据
-        const getLink = (keys) => {
-            for(const k of keys) if(Array.isArray(ins[k])) return ins[k][0];
-            return null;
-        };
+    resultsContainer.innerHTML = '';
 
-        const posLink = getLink(ALIASES.positive);
-        const negLink = getLink(ALIASES.negative);
-        const pipeLink = getLink(ALIASES.pipe);
-        const latentLink = getLink(ALIASES.latent) || pipeLink;
-        const modelLink = getLink(ALIASES.model) || pipeLink;
+    // 文件信息
+    const fileName = ctx.file?.name || '未知';
+    const fileSizeTxt = (typeof ctx.file?.size === 'number') ? prettyBytes(ctx.file.size) : '未知';
+    const ihdr = ctx.metadata?.__ihdr;
 
-        let posTxt = posLink ? recursiveText(posLink, apiData, muted) : "";
-        let negTxt = negLink ? recursiveText(negLink, apiData, muted) : "";
-        
-        // 如果没有直接连接，尝试从 Pipe 里找 (Pipe 往往混合了信息，这里简化处理，若无独立正负，则尝试Pipe上游文本)
-        if (!posTxt && pipeLink) posTxt = recursiveText(pipeLink, apiData, muted);
+    activeSamplers.forEach((samplerId, index) => {
+        const sampler = apiData[samplerId];
+        const samplerInputs = sampler?.inputs || {};
 
-        const steps = findValue(ins, ALIASES.steps, apiData, muted) || "??";
-        const cfg = findValue(ins, ALIASES.cfg, apiData, muted) || "??";
-        const seed = findValue(ins, ALIASES.seed, apiData, muted) || "??";
-        const samplerName = findValue(ins, ALIASES.sampler, apiData, muted) || "??";
-        const scheduler = findValue(ins, ALIASES.scheduler, apiData, muted) || "??";
-        const denoise = findValue(ins, ALIASES.denoise, apiData, muted);
-        
-        const sizeObj = findSize(latentLink, apiData, muted);
-        const width = sizeObj?.w ?? ctx.metadata.__ihdr?.width ?? "??";
-        const height = sizeObj?.h ?? ctx.metadata.__ihdr?.height ?? "??";
-        
-        const modelName = findModel(modelLink, apiData, muted) || "Unknown Model";
+        // 正/负提示词（含管道兜底）
+        const posLink = getLinkIdByAliases(samplerInputs, ALIASES.positive);
+        const negLink = getLinkIdByAliases(samplerInputs, ALIASES.negative);
+        const pipeLink = getLinkIdByAliases(samplerInputs, ALIASES.pipe);
 
-        // 构建 UI
-        const block = document.createElement('div');
-        block.className = 'sampler-block';
-        
+        let posText = posLink ? recursiveFindText(posLink, apiData, mutedNodes) : '';
+        let negText = negLink ? recursiveFindText(negLink, apiData, mutedNodes) : '';
+        if (!posText && !negText && pipeLink) {
+            // 没有直接正/负，则从管道上游尽量抓文本（可能混合）
+            const pipeAllText = recursiveFindText(pipeLink, apiData, mutedNodes);
+            if (pipeAllText) posText = pipeAllText;
+        }
+        const posFormatted = formatPrompt(posText);
+        const negFormatted = formatPrompt(negText);
+
+        // 参数解析（广覆盖别名）
+        const steps = getScalarByAliases(samplerInputs, ALIASES.steps, apiData, mutedNodes) ?? '未知';
+        const cfg = getScalarByAliases(samplerInputs, ALIASES.cfg, apiData, mutedNodes) ?? '未知';
+        const samplerNameVal = getScalarByAliases(samplerInputs, ALIASES.sampler_name, apiData, mutedNodes);
+        const schedulerVal = getScalarByAliases(samplerInputs, ALIASES.scheduler, apiData, mutedNodes);
+        const seed = getScalarByAliases(samplerInputs, ALIASES.seed, apiData, mutedNodes) ?? '未知';
+        const denoiseVal = getScalarByAliases(samplerInputs, ALIASES.denoise, apiData, mutedNodes);
+        const denoise = (denoiseVal != null) ? trimFloat(denoiseVal) : null;
+
+        // 潜空间/尺寸
+        const latentLinkId =
+            getLinkIdByAliases(samplerInputs, ALIASES.latent) ??
+            getLinkIdByAliases(samplerInputs, ALIASES.pipe); // 若管道里可能包含尺寸
+        const sizeFromGraph = latentLinkId ? findLatentSize(latentLinkId, apiData, mutedNodes) : null;
+        const width = sizeFromGraph?.width ?? ihdr?.width ?? '未知';
+        const height = sizeFromGraph?.height ?? ihdr?.height ?? '未知';
+
+        // 模型名
+        const modelLinkId =
+            getLinkIdByAliases(samplerInputs, ALIASES.model) ??
+            getLinkIdByAliases(samplerInputs, ALIASES.pipe); // 有些管道里封装模型
+        const modelName = modelLinkId ? (findModelName(modelLinkId, apiData, mutedNodes) || '未知') : '未知';
+        const modelHash = '未知';
+        const version = ctx.metadata?.Software || '未知';
+
+        // Lora
+        const loras = collectLoras(apiData, mutedNodes)
+            .map(l => `${l.name}${l.strength != null ? `: ${l.strength}` : ''}`)
+            .join(', ');
+
+        const paramsLine = [
+            `Steps: ${steps}`,
+            `Sampler: ${samplerNameVal ?? '未知'}`,
+            `Schedule type: ${capitalizeFirst(String(schedulerVal ?? '未知'))}`,
+            `CFG scale: ${cfg}`,
+            `Seed: ${seed}`,
+            `Size: ${width}x${height}`,
+            `Model hash: ${modelHash}`,
+            `Model: ${modelName}`,
+            (denoise != null ? `Denoising strength: ${denoise}` : null),
+            `Clip skip: ${findClipSkip(apiData, mutedNodes) ?? '未知'}`,
+            `Lora hashes: ${loras ? `"${loras}"` : '无'}`,
+            `Version: ${version}`
+        ].filter(Boolean).join(', ');
+
+        const fullText = `${posFormatted}\nNegative prompt: ${negFormatted}\n${paramsLine}`;
+
+        // --- UI 构建 ---
+        const samplerBlock = document.createElement('div');
+        samplerBlock.className = 'sampler-block';
+
         const title = document.createElement('div');
         title.className = 'sampler-title';
-        title.innerHTML = `<span>ComfyUI 生成 #${idx + 1}</span> <span style="font-size:0.8em;color:var(--text-dim);margin-left:auto">${node.class_type} [ID:${sid}]</span>`;
-        block.appendChild(title);
+        title.textContent = `采样器 #${index + 1} (节点ID: ${samplerId}, 类: ${sampler.class_type})`;
+        samplerBlock.appendChild(title);
 
-        // 基本信息
-        block.appendChild(buildKVCard('基础信息', [
-            ['Model', modelName],
-            ['Steps', steps],
-            ['Sampler', `${samplerName} (${scheduler})`],
-            ['CFG', cfg],
-            ['Seed', seed],
-            ['Size', `${width}x${height}`],
-            ['Denoise', denoise != null ? denoise : 'N/A']
-        ]));
+        // 图片信息
+        samplerBlock.appendChild(buildInfoCard('图片信息', (card) => {
+            const kv = document.createElement('div'); kv.className = 'kv';
+            kv.appendChild(kvRow('文件名', fileName));
+            kv.appendChild(kvRow('文件大小', fileSizeTxt));
+            card.appendChild(kv);
+        }));
 
-        block.appendChild(buildTextCard('正向提示词 (Positive)', cleanPrompt(posTxt)));
-        block.appendChild(buildTextCard('负向提示词 (Negative)', cleanPrompt(negTxt)));
-        
-        // EXIF & File
-        block.appendChild(buildKVCard('文件信息', [
-            ['Filename', ctx.file.name],
-            ['Size', prettyBytes(ctx.file.size)],
-            ['Format', `PNG ${ctx.metadata.__ihdr?.bitDepth}bit`],
-            ['Software', ctx.metadata.Software || 'ComfyUI']
-        ]));
+        // 提示词
+        samplerBlock.appendChild(buildTextCard('提示词', posFormatted));
 
-        resultsContainer.appendChild(block);
+        // 负面提示词
+        samplerBlock.appendChild(buildTextCard('负面提示词', negFormatted));
+
+        // 其他参数
+        samplerBlock.appendChild(buildInfoCard('其他参数', (card) => {
+            const pre = document.createElement('pre');
+            pre.textContent = paramsLine;
+            card.appendChild(pre);
+        }));
+
+        // 完整生成信息
+        samplerBlock.appendChild(buildTextCard('完整生成信息', fullText));
+
+        // EXIF
+        samplerBlock.appendChild(buildInfoCard('EXIF', (card) => {
+            const kv = document.createElement('div'); kv.className = 'kv';
+            const colorTypeMap = { 0:'Grayscale', 2:'RGB', 3:'Indexed', 4:'Grayscale Alpha', 6:'RGBA' };
+            const comp = (ihdr?.compression === 0) ? 'Deflate/Inflate' : (ihdr ? `未知(${ihdr.compression})` : '未知');
+            const filt = (ihdr?.filter === 0) ? 'Adaptive' : (ihdr ? `未知(${ihdr.filter})` : '未知');
+            const inter = (ihdr?.interlace === 0) ? 'Noninterlaced' : (ihdr?.interlace === 1 ? 'Adam7' : '未知');
+
+            kv.appendChild(kvRow('Image Width', ihdr?.width != null ? ihdr.width + 'px' : '未知'));
+            kv.appendChild(kvRow('Image Height', ihdr?.height != null ? ihdr.height + 'px' : '未知'));
+            kv.appendChild(kvRow('Bit Depth', ihdr?.bitDepth ?? '未知'));
+            kv.appendChild(kvRow('Color Type', ihdr?.colorType != null ? colorTypeMap[ihdr.colorType] || `未知(${ihdr.colorType})` : '未知'));
+            kv.appendChild(kvRow('Compression', comp));
+            kv.appendChild(kvRow('Filter', filt));
+            kv.appendChild(kvRow('Interlace', inter));
+            card.appendChild(kv);
+        }));
+
+        // parameters
+        samplerBlock.appendChild(buildTextCard('parameters', fullText));
+
+        // FileType
+        samplerBlock.appendChild(buildInfoCard('FileType', (card) => {
+            const div = document.createElement('div');
+            div.textContent = 'PNG';
+            card.appendChild(div);
+        }));
+
+        resultsContainer.appendChild(samplerBlock);
     });
 }
 
-/* ===== 渲染逻辑 (WebUI) ===== */
-function parseAndDisplayWebUI(rawText, ctx) {
-    const lines = rawText.split('\n');
-    let pos = "", neg = "", params = "";
-    
-    // 简单分割逻辑
-    const negIdx = lines.findIndex(l => l.startsWith('Negative prompt:'));
-    const paramIdx = lines.findIndex(l => l.startsWith('Steps:'));
-    
-    if (negIdx !== -1) {
-        pos = lines.slice(0, negIdx).join('\n');
-        neg = lines.slice(negIdx, paramIdx !== -1 ? paramIdx : lines.length).join('\n').replace('Negative prompt:', '').trim();
-    } else if (paramIdx !== -1) {
-        pos = lines.slice(0, paramIdx).join('\n');
-    } else {
-        pos = rawText;
-    }
-    
-    if (paramIdx !== -1) params = lines.slice(paramIdx).join('\n');
-
-    // 解析 params 行
-    const extract = (key) => {
-        const regex = new RegExp(`${key}:\\s*([^,]+)`);
-        const m = params.match(regex);
-        return m ? m[1].trim() : "??";
-    };
-
-    const block = document.createElement('div');
-    block.className = 'sampler-block';
-    
-    const title = document.createElement('div');
-    title.className = 'sampler-title';
-    title.innerText = 'WebUI (A1111) 生成信息';
-    block.appendChild(title);
-
-    block.appendChild(buildKVCard('参数详情', [
-        ['Model', extract('Model')],
-        ['Model Hash', extract('Model hash')],
-        ['Steps', extract('Steps')],
-        ['Sampler', extract('Sampler')],
-        ['CFG', extract('CFG scale')],
-        ['Seed', extract('Seed')],
-        ['Size', extract('Size')],
-        ['Denoise', extract('Denoising strength')]
-    ]));
-
-    block.appendChild(buildTextCard('正向提示词', cleanPrompt(pos)));
-    block.appendChild(buildTextCard('负向提示词', cleanPrompt(neg)));
-    block.appendChild(buildTextCard('原始参数串', params));
-
-    resultsContainer.appendChild(block);
+/* ===== 组件构建 ===== */
+function kvRow(label, value) {
+    const l = document.createElement('div'); l.className = 'label'; l.textContent = label;
+    const v = document.createElement('div'); v.className = 'value'; v.textContent = value;
+    const frag = document.createDocumentFragment(); frag.appendChild(l); frag.appendChild(v);
+    return frag;
 }
-
-/* ===== UI 组件构建 ===== */
-function buildKVCard(title, kvs) {
-    const card = document.createElement('div');
-    card.className = 'section-card';
-    card.innerHTML = `<h3>${title}</h3><div class="section-content"><div class="kv"></div></div>`;
-    const container = card.querySelector('.kv');
-    
-    kvs.forEach(([k, v]) => {
-        if (!v || v === '??') return;
-        const l = document.createElement('div'); l.className = 'label'; l.textContent = k;
-        const val = document.createElement('div'); val.className = 'value'; val.textContent = v;
-        container.appendChild(l);
-        container.appendChild(val);
-    });
-    return card;
+function buildInfoCard(title, builder) {
+    const card = document.createElement('div'); card.className = 'section-card';
+    const h3 = document.createElement('h3'); h3.textContent = title; card.appendChild(h3);
+    builder(card); return card;
 }
-
 function buildTextCard(title, text) {
-    const card = document.createElement('div');
-    card.className = 'section-card';
-    
+    const card = document.createElement('div'); card.className = 'section-card';
     const h3 = document.createElement('h3');
-    h3.textContent = title;
-    
-    const btn = document.createElement('button');
-    btn.className = 'copy-btn';
-    btn.textContent = '复制';
-    btn.onclick = () => copyText(text);
-    
-    h3.appendChild(btn);
+    const span = document.createElement('span'); span.textContent = title;
+    const btn = document.createElement('button'); btn.className = 'copy-btn'; btn.textContent = '复制';
+    btn.addEventListener('click', () => copyText(text || ''));
+    h3.appendChild(span); h3.appendChild(btn);
     card.appendChild(h3);
-    
-    const content = document.createElement('div');
-    content.className = 'section-content';
-    const pre = document.createElement('pre');
-    pre.textContent = text || '(空)';
-    content.appendChild(pre);
-    card.appendChild(content);
-    
+    const pre = document.createElement('pre'); pre.textContent = text || '';
+    card.appendChild(pre);
     return card;
 }
 
+/* ===== 文本提取：节点之间换行 ===== */
+function recursiveFindText(nodeId, apiData, mutedNodes, visited = new Set()) {
+    if (visited.has(nodeId)) return "";
+    visited.add(nodeId);
+    if (mutedNodes.has(nodeId)) return "";
+    const node = apiData[nodeId];
+    if (!node) return `[错误: 节点 ${nodeId} 未找到]`;
+
+    const inputs = node.inputs || {};
+    // 叶子：含 text 字段则作为一行
+    if (typeof inputs.text === 'string') {
+        return inputs.text;
+    }
+    // 递归所有输入
+    const lines = [];
+    const sortedKeys = Object.keys(inputs).sort();
+    for (const key of sortedKeys) {
+        const value = inputs[key];
+        if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
+            const sourceNodeId = value[0];
+            const found = recursiveFindText(sourceNodeId, apiData, mutedNodes, new Set(visited));
+            if (found) lines.push(found);
+        }
+    }
+    return lines.filter(Boolean).join('\n'); // 节点间换行
+}
+
+// 保留换行、行内规整逗号，不同来源节点之间添加空行
+function formatPrompt(text) {
+    if (!text) return "";
+    const lines = String(text).split(/\n+/)
+        .map(line => line
+            .split(/[,\r]+/)
+            .map(s => s.trim())
+            .filter(Boolean)
+            .join(', ')
+        )
+        .filter(Boolean);
+    // 在非空行之间添加空行
+    const result = [];
+    for (let i = 0; i < lines.length; i++) {
+        result.push(lines[i]);
+        // 如果不是最后一行，且下一行不为空，则添加空行
+        if (i < lines.length - 1 && lines[i] && lines[i+1]) {
+            result.push('');
+        }
+    }
+    return result.join('\n');
+}
+
+/* ===== 上游尺寸/模型/LoRA/CLIP skip 等 ===== */
+function findLatentSize(startNodeId, apiData, mutedNodes, visited = new Set()) {
+    if (!startNodeId || visited.has(startNodeId)) return null;
+    visited.add(startNodeId);
+    if (mutedNodes.has(startNodeId)) return null;
+    const node = apiData[startNodeId];
+    if (!node) return null;
+
+    if (node.class_type === 'EmptyLatentImage') {
+        const w = node.inputs?.width;
+        const h = node.inputs?.height;
+        if (typeof w === 'number' && typeof h === 'number') return { width: w, height: h };
+    }
+    const inputs = node.inputs || {};
+    const keys = Object.keys(inputs).sort();
+    for (const k of keys) {
+        const v = inputs[k];
+        if (Array.isArray(v) && typeof v[0] === 'string') {
+            const res = findLatentSize(v[0], apiData, mutedNodes, visited);
+            if (res) return res;
+        }
+    }
+    return null;
+}
+function findModelName(startNodeId, apiData, mutedNodes, visited = new Set()) {
+    if (!startNodeId || visited.has(startNodeId)) return null;
+    visited.add(startNodeId);
+    if (mutedNodes.has(startNodeId)) return null;
+    const node = apiData[startNodeId];
+    if (!node) return null;
+
+    const cls = node.class_type || '';
+    const ins = node.inputs || {};
+
+    if (/CheckpointLoader/i.test(cls) || /ModelLoader/i.test(cls) || /UNETLoader/i.test(cls) || /Load Checkpoint/i.test(cls)) {
+        const candidates = ['ckpt_name','model_name','checkpoint','ckpt','filename','file','model','ckptfile'];
+        for (const k of candidates) {
+            const val = ins[k];
+            if (typeof val === 'string' && val) return val;
+        }
+    }
+    for (const key of Object.keys(ins)) {
+        const v = ins[key];
+        if (Array.isArray(v) && typeof v[0] === 'string') {
+            const r = findModelName(v[0], apiData, mutedNodes, visited);
+            if (r) return r;
+        }
+    }
+    return null;
+}
+function collectLoras(apiData, mutedNodes) {
+    const out = [];
+    for (const id of Object.keys(apiData)) {
+        if (mutedNodes.has(id)) continue;
+        const n = apiData[id];
+        const cls = n.class_type || '';
+        if (/LoraLoader/i.test(cls)) {
+            const name = n.inputs?.lora_name || n.inputs?.loraname || n.inputs?.lora_model_name || n.inputs?.name;
+            const strength = (typeof n.inputs?.strength_model === 'number') ? trimFloat(n.inputs.strength_model)
+                          : (typeof n.inputs?.strength === 'number') ? trimFloat(n.inputs.strength)
+                          : undefined;
+            if (name) out.push({ name, strength });
+        }
+    }
+    return out;
+}
+function findClipSkip(apiData, mutedNodes) {
+    for (const id of Object.keys(apiData)) {
+        if (mutedNodes.has(id)) continue;
+        const n = apiData[id];
+        if (n.class_type === 'CLIPSetLastLayer') {
+            const v = n.inputs?.stop_at_clip_layer;
+            if (typeof v === 'number') {
+                if (v <= -1) return String(-v);
+                return String(v);
+            }
+        }
+    }
+    return null;
+}
+function capitalizeFirst(s) {
+    if (!s || typeof s !== 'string') return s;
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function trimFloat(n) {
+    if (typeof n !== 'number') return n;
+    return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
+}
 </script>
 </body>
 </html>
