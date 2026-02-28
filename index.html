@@ -1,897 +1,331 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-    <title>ComfyUI 终极提示词解析器 (v3)</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的工具箱</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    <script src="shared/theme.js"></script>
     <style>
-        :root {
-            --bg-color: #282c34;
-            --text-color: #abb2bf;
-            --primary-color: #61afef;
-            --border-color: #3e4451;
-            --card-bg-color: #21252b;
-            --pre-bg-color: #1c1f24;
-            --success-color: #98c379;
-            --error-color: #e06c75;
-            --warning-color: #e5c07b;
+        /* ===== MD3 浅色 ===== */
+        :root, [data-theme="light"] {
+            --md-primary: #6750A4;
+            --md-on-primary: #FFFFFF;
+            --md-primary-container: #EADDFF;
+            --md-on-primary-container: #21005D;
+            --md-surface: #FEF7FF;
+            --md-surface-container-low: #F7F2FA;
+            --md-surface-container: #F3EDF7;
+            --md-surface-container-high: #ECE6F0;
+            --md-on-surface: #1D1B20;
+            --md-on-surface-variant: #49454F;
+            --md-outline: #79747E;
+            --md-outline-variant: #CAC4D0;
+            --md-elevation-1: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
         }
-        
-        /* 西文字体设置为Century Gothic */
-        * {
-            font-family: "Century Gothic", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+        /* ===== MD3 深色 ===== */
+        [data-theme="dark"] {
+            --md-primary: #D0BCFF;
+            --md-on-primary: #381E72;
+            --md-primary-container: #4F378B;
+            --md-on-primary-container: #EADDFF;
+            --md-surface: #131313;
+            --md-surface-container-low: #1B1B1B;
+            --md-surface-container: #1E1E1E;
+            --md-surface-container-high: #252525;
+            --md-on-surface: #E6E0E9;
+            --md-on-surface-variant: #CAC4D0;
+            --md-outline: #938F99;
+            --md-outline-variant: #49454F;
+            --md-elevation-1: 0 1px 3px 1px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.6);
         }
-        
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0; 
-            padding: 0;
-            display: flex; 
-            justify-content: center;
+            font-family: 'Roboto', 'Noto Sans SC', sans-serif;
+            background-color: var(--md-surface);
+            color: var(--md-on-surface);
             min-height: 100vh;
-            position: relative;
-        }
-        .container { 
-            max-width: 1000px; 
-            width: 100%; 
-            margin: 2em 0;
-            position: relative;
-            z-index: 10;
-        }
-        h1 { 
-            color: var(--primary-color); 
-            text-align: center; 
-            margin-bottom: 1em; 
+            transition: background-color 0.2s, color 0.2s;
         }
 
-        #drop-zone {
-            border: 3px dashed var(--border-color);
-            border-radius: 10px;
-            padding: 50px 20px; 
-            text-align: center; 
-            cursor: pointer;
-            transition: all 0.3s ease; 
-            position: relative;
-        }
-        #drop-zone.dragover { border-color: var(--primary-color); background-color: var(--card-bg-color); }
-        #drop-zone p { margin: 0; font-size: 1.2em; }
-        #file-input { display: none; }
-
-        /* 侧边拖放区域 */
-        .side-drop-zone {
-            position: fixed;
+        /* ===== 顶栏 ===== */
+        .top-app-bar {
+            height: 64px;
+            padding: 0 8px 0 16px;
+            display: flex;
+            align-items: center;
+            background-color: var(--md-surface);
+            position: sticky;
             top: 0;
-            bottom: 0;
-            width: calc((100vw - 1000px) / 2);
-            z-index: 5;
-            transition: all 0.3s ease;
+            z-index: 100;
+        }
+        .top-app-bar .title {
+            font-size: 22px;
+            font-weight: 400;
+            margin-left: 12px;
+            flex: 1;
+        }
+        .icon-btn {
+            width: 48px; height: 48px;
+            border-radius: 50%;
+            border: none;
+            background: transparent;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
+            color: var(--md-on-surface-variant);
+            transition: background-color 0.15s;
+        }
+        .icon-btn:hover { background-color: var(--md-surface-container-high); }
+
+        /* 主题切换 */
+        .theme-toggle { position: relative; }
+        .theme-menu {
+            display: none;
+            position: absolute;
+            top: 52px; right: 0;
+            background: var(--md-surface-container);
+            border-radius: 12px;
+            box-shadow: var(--md-elevation-1);
+            overflow: hidden;
+            min-width: 160px;
+            z-index: 200;
+        }
+        .theme-menu.open { display: block; }
+        .theme-menu button {
+            width: 100%;
+            padding: 12px 16px;
+            border: none;
+            background: transparent;
+            color: var(--md-on-surface);
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: background-color 0.15s;
+        }
+        .theme-menu button:hover { background-color: var(--md-surface-container-high); }
+        .theme-menu button.active { color: var(--md-primary); }
+        .theme-menu button .material-icons-outlined { font-size: 20px; }
+
+        /* ===== Hero ===== */
+        .hero {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 48px 24px 32px;
+            text-align: center;
+        }
+        .hero .avatar {
+            width: 96px; height: 96px;
+            border-radius: 50%;
+            background-color: var(--md-primary-container);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+        }
+        .hero .avatar .material-icons-outlined {
+            font-size: 48px;
+            color: var(--md-on-primary-container);
+        }
+        .hero h1 {
+            font-size: 36px;
+            font-weight: 400;
+            margin-bottom: 8px;
+        }
+        .hero .subtitle {
+            font-size: 16px;
+            color: var(--md-on-surface-variant);
+            line-height: 1.5;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* ===== 区块标题 ===== */
+        .section-header {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 16px 24px 12px;
+        }
+        .section-header h2 {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--md-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.1px;
+        }
+
+        /* ===== 工具卡片 ===== */
+        .tools-grid {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 0 24px 64px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .tool-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background-color: var(--md-surface-container-low);
+            border-radius: 16px;
+            text-decoration: none;
+            color: inherit;
+            transition: background-color 200ms, box-shadow 200ms;
+            cursor: pointer;
+            border: 1px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+        .tool-card:hover {
+            background-color: var(--md-surface-container);
+            box-shadow: var(--md-elevation-1);
+        }
+        .tool-card:active { background-color: var(--md-surface-container-high); }
+        .tool-card::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%),
+                var(--md-primary) 0%, transparent 70%);
             opacity: 0;
+            transition: opacity 300ms;
             pointer-events: none;
         }
-        .side-drop-zone.left {
-            left: 0;
+        .tool-card:active::after { opacity: 0.08; }
+        .tool-card-icon {
+            width: 56px; height: 56px;
+            border-radius: 12px;
+            background-color: var(--md-primary-container);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
-        .side-drop-zone.right {
-            right: 0;
+        .tool-card-icon .material-icons-outlined {
+            font-size: 28px;
+            color: var(--md-on-primary-container);
         }
-        body.drag-active .side-drop-zone {
-            opacity: 1;
-            pointer-events: auto;
-            background-color: rgba(33, 37, 43, 0.8);
-            border: 3px dashed var(--primary-color);
-        }
-        .side-drop-zone .drop-text {
-            font-size: 1.5em;
-            color: var(--primary-color);
-            text-align: center;
-            transform: rotate(90deg);
-            white-space: nowrap;
-        }
-
-        #image-preview-container { text-align: center; margin-bottom: 1.5em; }
-        #image-preview { max-width: 100%; max-height: 300px; border-radius: 8px; border: 2px solid var(--border-color); }
-
-        #results-container { margin-top: 2em; }
-        .sampler-block {
-            border: 1px solid var(--border-color);
-            border-radius: 8px; 
-            margin-bottom: 2em; 
-            padding: 1em;
-            background-color: var(--card-bg-color);
-        }
-        .sampler-title {
-            font-size: 1.2em; 
-            font-weight: bold; 
-            color: var(--primary-color); 
-            margin-bottom: 1em;
-        }
-
-        .result-section { margin-bottom: 1.5em; }
-        .result-section h2 { 
-            margin: 0 0 0.5em 0; 
-            font-size: 1.1em; 
-        }
-        .result-section h2.positive { color: var(--success-color); }
-        .result-section h2.negative { color: var(--error-color); }
-        .result-section pre {
-            background-color: var(--pre-bg-color); 
-            padding: 1em; 
-            margin: 0;
-            white-space: pre-wrap; 
-            word-wrap: break-word; 
-            font-size: 0.95em; 
-            line-height: 1.6;
-            border-radius: 5px; 
-            max-height: 250px; 
-            overflow-y: auto;
-        }
-
-        .hidden { display: none; }
-        #status-message { 
-            text-align: center; 
-            margin-top: 1em; 
-            font-size: 1em; 
-            min-height: 1.5em; 
-        }
-        #status-message.error { color: var(--error-color); }
-        #status-message.warning { color: var(--warning-color); }
-
-        /* 卡片与键值布局 */
-        .section-card {
-            border: 1px solid var(--border-color);
-            border-radius: 8px; 
-            background-color: var(--card-bg-color);
-            padding: 12px 12px 10px 12px; 
-            margin-bottom: 12px;
-        }
-        .section-card h3 {
-            margin: 0 0 8px 0; 
-            font-size: 1.05em; 
-            color: var(--primary-color);
-            display: flex; 
-            align-items: center; 
-            gap: 8px;
-        }
-        .kv {
-            display: grid; 
-            grid-template-columns: 120px 1fr;
-            column-gap: 12px; 
-            row-gap: 8px;
-        }
-        .kv .label { 
-            color: #c0c6d0; 
-        }
-        .kv .value { 
-            color: var(--text-color); 
-            word-break: break-word; 
-            white-space: normal;
+        .tool-card-content { flex: 1; min-width: 0; }
+        .tool-card-content h3 { font-size: 16px; font-weight: 500; margin-bottom: 4px; }
+        .tool-card-content p {
+            font-size: 14px;
+            color: var(--md-on-surface-variant);
             line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
         }
-        .copy-btn {
-            margin-left: auto; 
-            font-size: 0.85em; 
-            background: transparent;
-            border: 1px solid var(--border-color); 
-            color: var(--text-color);
-            padding: 2px 8px; 
-            border-radius: 6px; 
-            cursor: pointer;
+        .tool-card-arrow { font-size: 20px; color: var(--md-on-surface-variant); flex-shrink: 0; }
+
+        /* ===== Footer ===== */
+        .footer {
+            text-align: center;
+            padding: 24px;
+            font-size: 12px;
+            color: var(--md-outline);
         }
-        .copy-btn:hover { border-color: var(--primary-color); color: var(--primary-color); }
-        
-        /* 确保所有文本元素使用Century Gothic字体 */
-        button, input, textarea, select {
-            font-family: inherit;
+
+        @media (max-width: 600px) {
+            .hero { padding: 32px 16px 24px; }
+            .hero h1 { font-size: 28px; }
+            .tools-grid { padding: 0 16px 48px; grid-template-columns: 1fr; }
         }
-        
-        /* 确保pre标签内的文本也能正确换行 */
-        pre {
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-    </style>
+</style>
 </head>
 <body>
-<!-- 左侧拖放区域 -->
-<div class="side-drop-zone left">
-    <div class="drop-text">拖放图片到此处</div>
-</div>
+    <!-- 顶栏 -->
+    <header class="top-app-bar">
+        <span class="material-icons-outlined" style="color: var(--md-on-surface-variant);">home</span>
+        <span class="title">我的工具箱</span>
+        <div class="theme-toggle">
+            <button class="icon-btn" id="theme-btn" title="切换主题">
+                <span class="material-icons-outlined" id="theme-icon">brightness_auto</span>
+            </button>
+            <div class="theme-menu" id="theme-menu">
+                <button data-theme="auto"><span class="material-icons-outlined">brightness_auto</span>跟随系统</button>
+                <button data-theme="light"><span class="material-icons-outlined">light_mode</span>浅色</button>
+                <button data-theme="dark"><span class="material-icons-outlined">dark_mode</span>深色</button>
+            </div>
+        </div>
+    </header>
 
-<!-- 右侧拖放区域 -->
-<div class="side-drop-zone right">
-    <div class="drop-text">拖放图片到此处</div>
-</div>
+    <!-- Hero -->
+    <section class="hero">
+        <div class="avatar">
+            <span class="material-icons-outlined">person</span>
+        </div>
+        <h1>我的工具箱</h1>
+        <p class="subtitle">收集和整理各种实用小工具，让工作流更顺畅</p>
+    </section>
 
-<div class="container">
-    <h1>ComfyUI 终极提示词解析器 (v3)</h1>
-
-    <div id="drop-zone">
-        <p>将 PNG 文件拖拽到此处，或点击选择文件</p>
-        <input type="file" id="file-input" accept="image/png">
+    <!-- 工具区 -->
+    <div class="section-header">
+        <h2>工具</h2>
     </div>
 
-    <div id="status-message"></div>
-
-    <div id="image-preview-container" class="hidden">
-        <img id="image-preview" src="" alt="Image Preview">
+    <div class="tools-grid">
+        <a href="tools/comfyui-parser.html" class="tool-card" id="card-comfyui">
+            <div class="tool-card-icon">
+                <span class="material-icons-outlined">image_search</span>
+            </div>
+            <div class="tool-card-content">
+                <h3>ComfyUI 提示词解析器</h3>
+                <p>从 ComfyUI 生成的 PNG 图片中提取工作流信息、提示词、模型参数等元数据</p>
+            </div>
+            <span class="material-icons-outlined tool-card-arrow">arrow_forward</span>
+        </a>
     </div>
 
-    <div id="results-container"></div>
-</div>
+    <footer class="footer">用心收集的小工具</footer>
 
-<script>
-/* ===== 基础DOM ===== */
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
-const imagePreviewContainer = document.getElementById('image-preview-container');
-const imagePreview = document.getElementById('image-preview');
-const resultsContainer = document.getElementById('results-container');
-const statusMessage = document.getElementById('status-message');
-const body = document.body;
+    <script>
+        // Ripple
+        document.querySelectorAll('.tool-card').forEach(card => {
+            card.addEventListener('pointerdown', (e) => {
+                const rect = card.getBoundingClientRect();
+                card.style.setProperty('--ripple-x', ((e.clientX - rect.left) / rect.width * 100).toFixed(1) + '%');
+                card.style.setProperty('--ripple-y', ((e.clientY - rect.top) / rect.height * 100).toFixed(1) + '%');
+            });
+        });
 
-/* ===== 事件 ===== */
-dropZone.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+        // 主题切换
+        (function() {
+            const btn = document.getElementById('theme-btn');
+            const menu = document.getElementById('theme-menu');
+            const icon = document.getElementById('theme-icon');
+            const iconMap = { auto: 'brightness_auto', light: 'light_mode', dark: 'dark_mode' };
 
-// 全局拖放事件处理
-document.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    body.classList.add('drag-active');
-});
-
-document.addEventListener('dragleave', (e) => {
-    // 只有当鼠标离开整个文档时才移除样式
-    if (e.clientX <= 0 || e.clientX >= window.innerWidth || 
-        e.clientY <= 0 || e.clientY >= window.innerHeight) {
-        body.classList.remove('drag-active');
-    }
-});
-
-document.addEventListener('drop', (e) => {
-    e.preventDefault();
-    body.classList.remove('drag-active');
-    handleFiles(e.dataTransfer.files);
-});
-
-// 主拖放区域事件
-dropZone.addEventListener('dragover', (e) => { 
-    e.preventDefault(); 
-    dropZone.classList.add('dragover'); 
-});
-
-dropZone.addEventListener('dragleave', () => { 
-    dropZone.classList.remove('dragover'); 
-});
-
-dropZone.addEventListener('drop', (e) => { 
-    e.preventDefault(); 
-    dropZone.classList.remove('dragover'); 
-    handleFiles(e.dataTransfer.files); 
-});
-
-function resetUI() {
-    resultsContainer.innerHTML = '';
-    imagePreviewContainer.classList.add('hidden');
-    setStatus('');
-}
-function setStatus(message, type = '') {
-    statusMessage.textContent = message;
-    statusMessage.className = type;
-}
-function prettyBytes(bytes) {
-    if (typeof bytes !== 'number') return '未知';
-    const units = ['B','KB','MB','GB','TB'];
-    let i = 0, v = bytes;
-    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-    const fixed = (v < 10 && i > 0) ? 2 : 1;
-    return `${v.toFixed(fixed)} ${units[i]}`;
-}
-function copyText(text) {
-    if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-        setStatus('已复制到剪贴板'); setTimeout(() => setStatus(''), 1200);
-    }).catch(() => setStatus('复制失败', 'error'));
-}
-
-/* ===== 文件处理 ===== */
-async function handleFiles(files) {
-    if (files.length === 0) return;
-    const file = files[0];
-    if (file.type !== 'image/png') {
-        setStatus('错误: 请上传一个PNG格式的图片。', 'error');
-        return;
-    }
-
-    resetUI();
-    setStatus('正在解析图片...');
-
-    try {
-        // 预览
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            imagePreview.src = e.target.result;
-            imagePreviewContainer.classList.remove('hidden');
-        };
-        reader.readAsDataURL(file);
-
-        // 读取 PNG 元数据
-        const arrayBuffer = await file.arrayBuffer();
-        const metadata = await extractPngMetadata(arrayBuffer);
-
-        const apiDataStr = metadata['prompt'] || metadata['workflow'];
-        const guiDataStr = metadata['workflow'];
-
-        if (!apiDataStr) {
-            setStatus('错误: 在图片中未找到 ComfyUI 的工作流元数据。', 'error');
-            return;
-        }
-
-        const sanitize = (str) => str.replace(/NaN/g, 'null');
-        const apiData = JSON.parse(sanitize(apiDataStr));
-        const guiData = guiDataStr ? JSON.parse(sanitize(guiDataStr)) : null;
-
-        parseAndDisplay(apiData, guiData, { file, metadata });
-        setStatus('解析成功！', 'success');
-    } catch (err) {
-        console.error('解析失败:', err);
-        setStatus(`解析失败: ${err.message}`, 'error');
-    }
-}
-
-/* ===== PNG 元数据解析（含 IHDR） ===== */
-async function extractPngMetadata(arrayBuffer) {
-    const dataView = new DataView(arrayBuffer);
-    // PNG signature
-    if (dataView.getUint32(0) !== 0x89504E47 || dataView.getUint32(4) !== 0x0D0A1A0A) {
-        throw new Error('不是一个有效的PNG文件。');
-    }
-    let offset = 8;
-    const td = new TextDecoder('utf-8');
-    const metadata = {};
-    while (offset < dataView.byteLength) {
-        const length = dataView.getUint32(offset);
-        const typeOffset = offset + 4;
-        const dataOffset = typeOffset + 4;
-        const crcOffset = dataOffset + length;
-        if (crcOffset > dataView.byteLength) break;
-
-        const type = td.decode(new Uint8Array(arrayBuffer, typeOffset, 4));
-
-        if (type === 'IHDR' && length === 13) {
-            const dv = new DataView(arrayBuffer, dataOffset, length);
-            const width = dv.getUint32(0);
-            const height = dv.getUint32(4);
-            const bitDepth = dv.getUint8(8);
-            const colorType = dv.getUint8(9);
-            const compression = dv.getUint8(10);
-            const filter = dv.getUint8(11);
-            const interlace = dv.getUint8(12);
-            metadata.__ihdr = { width, height, bitDepth, colorType, compression, filter, interlace };
-        }
-
-        // tEXt
-        if (type === 'tEXt') {
-            const chunkData = new Uint8Array(arrayBuffer, dataOffset, length);
-            const keywordEnd = chunkData.indexOf(0);
-            if (keywordEnd > 0) {
-                const keyword = td.decode(chunkData.slice(0, keywordEnd));
-                metadata[keyword] = td.decode(chunkData.slice(keywordEnd + 1));
+            function updateIcon() {
+                icon.textContent = iconMap[ThemeManager.getPreference()] || 'brightness_auto';
+                menu.querySelectorAll('button').forEach(b => {
+                    b.classList.toggle('active', b.dataset.theme === ThemeManager.getPreference());
+                });
             }
-        }
-        // iTXt（部分工具会写）
-        if (type === 'iTXt') {
-            const chunkData = new Uint8Array(arrayBuffer, dataOffset, length);
-            // iTXt: keyword\0 compression_flag compression_method language_tag\0 translated_keyword\0 text
-            // 简化：尽量抓 keyword 和 text
-            let p = 0;
-            const readNullTerm = () => {
-                const start = p;
-                while (p < chunkData.length && chunkData[p] !== 0) p++;
-                const s = td.decode(chunkData.slice(start, p));
-                p++; // skip null
-                return s;
-            };
-            const keyword = readNullTerm();
-            if (p + 2 <= chunkData.length) {
-                const compFlag = chunkData[p++]; // 0/1
-                const compMethod = chunkData[p++]; // usually 0
-                // language_tag
-                const _lang = readNullTerm();
-                // translated_keyword
-                const _translated = readNullTerm();
-                // text (maybe compressed)
-                let text = '';
-                if (compFlag === 1) {
-                    // 压缩文本很少见，这里保守忽略压缩，避免引入依赖；只在未压缩时读取
-                    text = '';
-                } else {
-                    text = td.decode(chunkData.slice(p));
-                }
-                if (keyword) metadata[keyword] = text;
-            }
-        }
 
-        offset = crcOffset + 4;
-        if (type === 'IEND') break;
-    }
-    return metadata;
-}
-
-/* ====== 采样器识别增强：别名/白名单/排除清单 ====== */
-
-// 白名单：明确属于"执行采样"的节点（含第三方）
-const SAMPLER_CLASS_WHITELIST = new Set([
-  // 核心
-  'KSampler', 'KSamplerAdvanced', 'FaceDetailer',
-  // Comfy Core 扩展执行器
-  'SamplerCustom', 'SamplerCustomAdvanced',
-  // Efficiency Nodes
-  'KSampler (Efficient)', 'KSampler Adv. (Efficient)', 'KSampler SDXL (Eff.)',
-  // Inspire Pack
-  'KSampler //Inspire', 'KSamplerAdvanced //Inspire', 'KSamplerPipe //Inspire', 'KSamplerAdvancedPipe //Inspire',
-  // Impact Pack 执行器
-  'ImpactKSamplerBasicPipe', 'ImpactKSamplerAdvancedBasicPipe', 'TwoAdvancedSamplersForMask',
-  // easy-use 系
-  'easy kSampler','easy fullkSampler','easy unSampler','easy kSamplerTiled','easy kSamplerCustom',
-  'easy kSamplerSDTurbo','easy kSamplerInpainting','easy kSamplerDownscaleUnet','easy kSamplerLayerDiffusion','easy fullCascadeKSampler',
-  // Essentials 变体
-  'KSamplerVariationsStochastic+','KSamplerVariationsWithNoise+',
-  // Lumina
-  'LuminaT2ISampler'
-]);
-
-// 明确不是执行采样器（仅提供算法/配置/选择等）
-const SAMPLER_CLASS_EXCLUDE = new Set([
-  'SamplerDPMPP_2M_SDE','SamplerEulerAncestral','SamplerLMS','SamplerER_SDE','SamplerSASolver',
-  'SamplerDPMPP_SDE','SamplerLCMUpscale','SamplerDPMPP_3M_SDE','SamplerDPMAdaptative','SamplerDPMPP_2S_Ancestral','SamplerEulerAncestralCFGPP',
-  'KSamplerSelect','KSamplerProvider','KSamplerAdvancedProvider','TiledKSamplerProvider',
-  'FluxSamplerParams+','PlotParameters+','GemmaSampler','KSampler Config (rgthree)'
-]);
-
-// 输入别名
-const ALIASES = {
-  positive: [
-    'positive','pos','conditioning','cond','c','c_in','c_positive','clip_conds','prompt','prompt_text','positive_prompt','c_up'
-  ],
-  negative: [
-    'negative','neg','negative_conditioning','uncond','uc','c_in_neg','unprompt','negative_prompt','neg_prompt','ncond','c_down'
-  ],
-  model: [
-    'model','model_in','sd_model','base_model','unet','unet_model','model_unet','ckpt','ckpt_model'
-  ],
-  latent: [
-    'latent_image','latent','samples','sample','start_samples','initial_latent','noise','image_latent','x','z','latent_in'
-  ],
-  // Pipe/组合输入
-  pipe: [
-    'pipe','basic_pipe','sdxl_tuple','sdxl_pipe','sdxl','ksampler','ksampler_advanced','detailer_pipe','tuple'
-  ],
-  steps: [
-    'steps','n_steps','num_steps','step_count','sampling_steps','iters','k_steps'
-  ],
-  cfg: [
-    'cfg','cfg_scale','scale','guidance','guidance_scale','cfg_strength','w','g'
-  ],
-  sampler_name: [
-    'sampler_name','sampler','sampler_type','k_sampler','algorithm','algo','method','sampler_enum'
-  ],
-  scheduler: [
-    'scheduler','schedule','schedule_type','scheduler_type','sigmas','sigma_schedule','sigma_sampler','noise_schedule'
-  ],
-  seed: [
-    'seed','noise_seed','random_seed','rng','seed_in','sampler_seed','initial_seed','variation_seed','main_seed'
-  ],
-  denoise: [
-    'denoise','denoise_strength','strength','noise_strength'
-  ],
-};
-
-// 工具：是否有任一键
-function hasAnyKey(obj, keys) {
-  return keys.some(k => Object.prototype.hasOwnProperty.call(obj, k));
-}
-// 工具：找连线源节点
-function getLinkIdByAliases(inputs, aliasKeys) {
-  for (const k of aliasKeys) {
-    const v = inputs[k];
-    if (Array.isArray(v) && v.length && typeof v[0] === 'string') return v[0];
-  }
-  return null;
-}
-// 工具：取标量（含上游解析）
-function getScalarByAliases(inputs, aliasKeys, apiData, mutedNodes) {
-  for (const k of aliasKeys) {
-    if (!Object.prototype.hasOwnProperty.call(inputs, k)) continue;
-    const v = inputs[k];
-    if (typeof v === 'number' || typeof v === 'string') return v;
-    if (Array.isArray(v) && v.length && typeof v[0] === 'string') {
-      const resolved = resolveScalarFromNode(v[0], apiData, mutedNodes);
-      if (resolved != null) return resolved;
-    }
-  }
-  return null;
-}
-// 解析上游数值
-function resolveScalarFromNode(nodeId, apiData, mutedNodes, visited = new Set()) {
-  if (!nodeId || visited.has(nodeId)) return null;
-  visited.add(nodeId);
-  if (mutedNodes.has(nodeId)) return null;
-  const node = apiData[nodeId];
-  if (!node) return null;
-
-  const ins = node.inputs || {};
-  // 常见数值键
-  const candidateKeys = ['value','val','number','float','int','strength','steps','cfg','cfg_scale','w','g'];
-  for (const key of candidateKeys) {
-    const vv = ins[key];
-    if (typeof vv === 'number' || typeof vv === 'string') return vv;
-  }
-  // 继续向上
-  const keys = Object.keys(ins).sort();
-  for (const key of keys) {
-    const v = ins[key];
-    if (Array.isArray(v) && v.length && typeof v[0] === 'string') {
-      const r = resolveScalarFromNode(v[0], apiData, mutedNodes, visited);
-      if (r != null) return r;
-    }
-  }
-  return null;
-}
-
-// 判断是否为"执行采样器"
-function isLikelySamplerNode(node) {
-  const cls = String(node.class_type || '');
-  if (SAMPLER_CLASS_EXCLUDE.has(cls)) return false;
-  if (SAMPLER_CLASS_WHITELIST.has(cls)) return true;
-
-  const inputs = node.inputs || {};
-  const looksLikeByName = /sampler/i.test(cls) || /detailer/i.test(cls) || /ksampler/i.test(cls);
-  const hasLatentish = hasAnyKey(inputs, ALIASES.latent) || hasAnyKey(inputs, ALIASES.pipe);
-  const hasPosOrNeg = hasAnyKey(inputs, ALIASES.positive) || hasAnyKey(inputs, ALIASES.negative);
-  const hasModelish = hasAnyKey(inputs, ALIASES.model);
-  const hasStepsOrCfg = hasAnyKey(inputs, ALIASES.steps) || hasAnyKey(inputs, ALIASES.cfg);
-
-  // 名称像采样器 且 有潜空间 或 管道；并且具备正/负 或 模型/步数/CFG 中的任意
-  if (looksLikeByName && hasLatentish && (hasPosOrNeg || hasModelish || hasStepsOrCfg)) return true;
-
-  // 兜底：核心类
-  if (cls === 'KSampler' || cls === 'KSamplerAdvanced') return true;
-
-  return false;
-}
-function detectActiveSamplers(apiData, mutedNodes) {
-  return Object.keys(apiData).filter(id => {
-    const n = apiData[id];
-    if (!n || mutedNodes.has(id)) return false;
-    return isLikelySamplerNode(n);
-  });
-}
-
-/* ===== 主逻辑 ===== */
-function parseAndDisplay(apiData, guiData, ctx = {}) {
-    const mutedNodes = new Set();
-    if (guiData && guiData.nodes) {
-        for (const node of guiData.nodes) {
-            if (node.mode === 2 || node.mode === 4) {
-                mutedNodes.add(String(node.id));
-            }
-        }
-    } else {
-        setStatus('警告: 未找到GUI工作流数据(workflow), 无法判断节点是否被禁用。', 'warning');
-    }
-
-    // 识别更广的采样器
-    const activeSamplers = detectActiveSamplers(apiData, mutedNodes);
-    if (activeSamplers.length === 0) {
-        resultsContainer.innerHTML = '<div style="text-align:center; color: var(--error-color);">错误: 工作流中未找到任何 激活 的采样器节点。</div>';
-        return;
-    }
-
-    resultsContainer.innerHTML = '';
-
-    // 文件信息
-    const fileName = ctx.file?.name || '未知';
-    const fileSizeTxt = (typeof ctx.file?.size === 'number') ? prettyBytes(ctx.file.size) : '未知';
-    const ihdr = ctx.metadata?.__ihdr;
-
-    activeSamplers.forEach((samplerId, index) => {
-        const sampler = apiData[samplerId];
-        const samplerInputs = sampler?.inputs || {};
-
-        // 正/负提示词（含管道兜底）
-        const posLink = getLinkIdByAliases(samplerInputs, ALIASES.positive);
-        const negLink = getLinkIdByAliases(samplerInputs, ALIASES.negative);
-        const pipeLink = getLinkIdByAliases(samplerInputs, ALIASES.pipe);
-
-        let posText = posLink ? recursiveFindText(posLink, apiData, mutedNodes) : '';
-        let negText = negLink ? recursiveFindText(negLink, apiData, mutedNodes) : '';
-        if (!posText && !negText && pipeLink) {
-            // 没有直接正/负，则从管道上游尽量抓文本（可能混合）
-            const pipeAllText = recursiveFindText(pipeLink, apiData, mutedNodes);
-            if (pipeAllText) posText = pipeAllText;
-        }
-        const posFormatted = formatPrompt(posText);
-        const negFormatted = formatPrompt(negText);
-
-        // 参数解析（广覆盖别名）
-        const steps = getScalarByAliases(samplerInputs, ALIASES.steps, apiData, mutedNodes) ?? '未知';
-        const cfg = getScalarByAliases(samplerInputs, ALIASES.cfg, apiData, mutedNodes) ?? '未知';
-        const samplerNameVal = getScalarByAliases(samplerInputs, ALIASES.sampler_name, apiData, mutedNodes);
-        const schedulerVal = getScalarByAliases(samplerInputs, ALIASES.scheduler, apiData, mutedNodes);
-        const seed = getScalarByAliases(samplerInputs, ALIASES.seed, apiData, mutedNodes) ?? '未知';
-        const denoiseVal = getScalarByAliases(samplerInputs, ALIASES.denoise, apiData, mutedNodes);
-        const denoise = (denoiseVal != null) ? trimFloat(denoiseVal) : null;
-
-        // 潜空间/尺寸
-        const latentLinkId =
-            getLinkIdByAliases(samplerInputs, ALIASES.latent) ??
-            getLinkIdByAliases(samplerInputs, ALIASES.pipe); // 若管道里可能包含尺寸
-        const sizeFromGraph = latentLinkId ? findLatentSize(latentLinkId, apiData, mutedNodes) : null;
-        const width = sizeFromGraph?.width ?? ihdr?.width ?? '未知';
-        const height = sizeFromGraph?.height ?? ihdr?.height ?? '未知';
-
-        // 模型名
-        const modelLinkId =
-            getLinkIdByAliases(samplerInputs, ALIASES.model) ??
-            getLinkIdByAliases(samplerInputs, ALIASES.pipe); // 有些管道里封装模型
-        const modelName = modelLinkId ? (findModelName(modelLinkId, apiData, mutedNodes) || '未知') : '未知';
-        const modelHash = '未知';
-        const version = ctx.metadata?.Software || '未知';
-
-        // Lora
-        const loras = collectLoras(apiData, mutedNodes)
-            .map(l => `${l.name}${l.strength != null ? `: ${l.strength}` : ''}`)
-            .join(', ');
-
-        const paramsLine = [
-            `Steps: ${steps}`,
-            `Sampler: ${samplerNameVal ?? '未知'}`,
-            `Schedule type: ${capitalizeFirst(String(schedulerVal ?? '未知'))}`,
-            `CFG scale: ${cfg}`,
-            `Seed: ${seed}`,
-            `Size: ${width}x${height}`,
-            `Model hash: ${modelHash}`,
-            `Model: ${modelName}`,
-            (denoise != null ? `Denoising strength: ${denoise}` : null),
-            `Clip skip: ${findClipSkip(apiData, mutedNodes) ?? '未知'}`,
-            `Lora hashes: ${loras ? `"${loras}"` : '无'}`,
-            `Version: ${version}`
-        ].filter(Boolean).join(', ');
-
-        const fullText = `${posFormatted}\nNegative prompt: ${negFormatted}\n${paramsLine}`;
-
-        // --- UI 构建 ---
-        const samplerBlock = document.createElement('div');
-        samplerBlock.className = 'sampler-block';
-
-        const title = document.createElement('div');
-        title.className = 'sampler-title';
-        title.textContent = `采样器 #${index + 1} (节点ID: ${samplerId}, 类: ${sampler.class_type})`;
-        samplerBlock.appendChild(title);
-
-        // 图片信息
-        samplerBlock.appendChild(buildInfoCard('图片信息', (card) => {
-            const kv = document.createElement('div'); kv.className = 'kv';
-            kv.appendChild(kvRow('文件名', fileName));
-            kv.appendChild(kvRow('文件大小', fileSizeTxt));
-            card.appendChild(kv);
-        }));
-
-        // 提示词
-        samplerBlock.appendChild(buildTextCard('提示词', posFormatted));
-
-        // 负面提示词
-        samplerBlock.appendChild(buildTextCard('负面提示词', negFormatted));
-
-        // 其他参数
-        samplerBlock.appendChild(buildInfoCard('其他参数', (card) => {
-            const pre = document.createElement('pre');
-            pre.textContent = paramsLine;
-            card.appendChild(pre);
-        }));
-
-        // 完整生成信息
-        samplerBlock.appendChild(buildTextCard('完整生成信息', fullText));
-
-        // EXIF
-        samplerBlock.appendChild(buildInfoCard('EXIF', (card) => {
-            const kv = document.createElement('div'); kv.className = 'kv';
-            const colorTypeMap = { 0:'Grayscale', 2:'RGB', 3:'Indexed', 4:'Grayscale Alpha', 6:'RGBA' };
-            const comp = (ihdr?.compression === 0) ? 'Deflate/Inflate' : (ihdr ? `未知(${ihdr.compression})` : '未知');
-            const filt = (ihdr?.filter === 0) ? 'Adaptive' : (ihdr ? `未知(${ihdr.filter})` : '未知');
-            const inter = (ihdr?.interlace === 0) ? 'Noninterlaced' : (ihdr?.interlace === 1 ? 'Adam7' : '未知');
-
-            kv.appendChild(kvRow('Image Width', ihdr?.width != null ? ihdr.width + 'px' : '未知'));
-            kv.appendChild(kvRow('Image Height', ihdr?.height != null ? ihdr.height + 'px' : '未知'));
-            kv.appendChild(kvRow('Bit Depth', ihdr?.bitDepth ?? '未知'));
-            kv.appendChild(kvRow('Color Type', ihdr?.colorType != null ? colorTypeMap[ihdr.colorType] || `未知(${ihdr.colorType})` : '未知'));
-            kv.appendChild(kvRow('Compression', comp));
-            kv.appendChild(kvRow('Filter', filt));
-            kv.appendChild(kvRow('Interlace', inter));
-            card.appendChild(kv);
-        }));
-
-        // parameters
-        samplerBlock.appendChild(buildTextCard('parameters', fullText));
-
-        // FileType
-        samplerBlock.appendChild(buildInfoCard('FileType', (card) => {
-            const div = document.createElement('div');
-            div.textContent = 'PNG';
-            card.appendChild(div);
-        }));
-
-        resultsContainer.appendChild(samplerBlock);
-    });
-}
-
-/* ===== 组件构建 ===== */
-function kvRow(label, value) {
-    const l = document.createElement('div'); l.className = 'label'; l.textContent = label;
-    const v = document.createElement('div'); v.className = 'value'; v.textContent = value;
-    const frag = document.createDocumentFragment(); frag.appendChild(l); frag.appendChild(v);
-    return frag;
-}
-function buildInfoCard(title, builder) {
-    const card = document.createElement('div'); card.className = 'section-card';
-    const h3 = document.createElement('h3'); h3.textContent = title; card.appendChild(h3);
-    builder(card); return card;
-}
-function buildTextCard(title, text) {
-    const card = document.createElement('div'); card.className = 'section-card';
-    const h3 = document.createElement('h3');
-    const span = document.createElement('span'); span.textContent = title;
-    const btn = document.createElement('button'); btn.className = 'copy-btn'; btn.textContent = '复制';
-    btn.addEventListener('click', () => copyText(text || ''));
-    h3.appendChild(span); h3.appendChild(btn);
-    card.appendChild(h3);
-    const pre = document.createElement('pre'); pre.textContent = text || '';
-    card.appendChild(pre);
-    return card;
-}
-
-/* ===== 文本提取：节点之间换行 ===== */
-function recursiveFindText(nodeId, apiData, mutedNodes, visited = new Set()) {
-    if (visited.has(nodeId)) return "";
-    visited.add(nodeId);
-    if (mutedNodes.has(nodeId)) return "";
-    const node = apiData[nodeId];
-    if (!node) return `[错误: 节点 ${nodeId} 未找到]`;
-
-    const inputs = node.inputs || {};
-    // 叶子：含 text 字段则作为一行
-    if (typeof inputs.text === 'string') {
-        return inputs.text;
-    }
-    // 递归所有输入
-    const lines = [];
-    const sortedKeys = Object.keys(inputs).sort();
-    for (const key of sortedKeys) {
-        const value = inputs[key];
-        if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
-            const sourceNodeId = value[0];
-            const found = recursiveFindText(sourceNodeId, apiData, mutedNodes, new Set(visited));
-            if (found) lines.push(found);
-        }
-    }
-    return lines.filter(Boolean).join('\n'); // 节点间换行
-}
-
-// 保留换行、行内规整逗号，不同来源节点之间添加空行
-function formatPrompt(text) {
-    if (!text) return "";
-    const lines = String(text).split(/\n+/)
-        .map(line => line
-            .split(/[,\r]+/)
-            .map(s => s.trim())
-            .filter(Boolean)
-            .join(', ')
-        )
-        .filter(Boolean);
-    // 在非空行之间添加空行
-    const result = [];
-    for (let i = 0; i < lines.length; i++) {
-        result.push(lines[i]);
-        // 如果不是最后一行，且下一行不为空，则添加空行
-        if (i < lines.length - 1 && lines[i] && lines[i+1]) {
-            result.push('');
-        }
-    }
-    return result.join('\n');
-}
-
-/* ===== 上游尺寸/模型/LoRA/CLIP skip 等 ===== */
-function findLatentSize(startNodeId, apiData, mutedNodes, visited = new Set()) {
-    if (!startNodeId || visited.has(startNodeId)) return null;
-    visited.add(startNodeId);
-    if (mutedNodes.has(startNodeId)) return null;
-    const node = apiData[startNodeId];
-    if (!node) return null;
-
-    if (node.class_type === 'EmptyLatentImage') {
-        const w = node.inputs?.width;
-        const h = node.inputs?.height;
-        if (typeof w === 'number' && typeof h === 'number') return { width: w, height: h };
-    }
-    const inputs = node.inputs || {};
-    const keys = Object.keys(inputs).sort();
-    for (const k of keys) {
-        const v = inputs[k];
-        if (Array.isArray(v) && typeof v[0] === 'string') {
-            const res = findLatentSize(v[0], apiData, mutedNodes, visited);
-            if (res) return res;
-        }
-    }
-    return null;
-}
-function findModelName(startNodeId, apiData, mutedNodes, visited = new Set()) {
-    if (!startNodeId || visited.has(startNodeId)) return null;
-    visited.add(startNodeId);
-    if (mutedNodes.has(startNodeId)) return null;
-    const node = apiData[startNodeId];
-    if (!node) return null;
-
-    const cls = node.class_type || '';
-    const ins = node.inputs || {};
-
-    if (/CheckpointLoader/i.test(cls) || /ModelLoader/i.test(cls) || /UNETLoader/i.test(cls) || /Load Checkpoint/i.test(cls)) {
-        const candidates = ['ckpt_name','model_name','checkpoint','ckpt','filename','file','model','ckptfile'];
-        for (const k of candidates) {
-            const val = ins[k];
-            if (typeof val === 'string' && val) return val;
-        }
-    }
-    for (const key of Object.keys(ins)) {
-        const v = ins[key];
-        if (Array.isArray(v) && typeof v[0] === 'string') {
-            const r = findModelName(v[0], apiData, mutedNodes, visited);
-            if (r) return r;
-        }
-    }
-    return null;
-}
-function collectLoras(apiData, mutedNodes) {
-    const out = [];
-    for (const id of Object.keys(apiData)) {
-        if (mutedNodes.has(id)) continue;
-        const n = apiData[id];
-        const cls = n.class_type || '';
-        if (/LoraLoader/i.test(cls)) {
-            const name = n.inputs?.lora_name || n.inputs?.loraname || n.inputs?.lora_model_name || n.inputs?.name;
-            const strength = (typeof n.inputs?.strength_model === 'number') ? trimFloat(n.inputs.strength_model)
-                          : (typeof n.inputs?.strength === 'number') ? trimFloat(n.inputs.strength)
-                          : undefined;
-            if (name) out.push({ name, strength });
-        }
-    }
-    return out;
-}
-function findClipSkip(apiData, mutedNodes) {
-    for (const id of Object.keys(apiData)) {
-        if (mutedNodes.has(id)) continue;
-        const n = apiData[id];
-        if (n.class_type === 'CLIPSetLastLayer') {
-            const v = n.inputs?.stop_at_clip_layer;
-            if (typeof v === 'number') {
-                if (v <= -1) return String(-v);
-                return String(v);
-            }
-        }
-    }
-    return null;
-}
-function capitalizeFirst(s) {
-    if (!s || typeof s !== 'string') return s;
-    return s.charAt(0).toUpperCase() + s.slice(1);
-}
-function trimFloat(n) {
-    if (typeof n !== 'number') return n;
-    return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/,'').replace(/\.$/,'');
-}
-</script>
+            btn.addEventListener('click', (e) => { e.stopPropagation(); menu.classList.toggle('open'); });
+            menu.querySelectorAll('button').forEach(b => {
+                b.addEventListener('click', () => {
+                    ThemeManager.setPreference(b.dataset.theme);
+                    updateIcon();
+                    menu.classList.remove('open');
+                });
+            });
+            document.addEventListener('click', () => menu.classList.remove('open'));
+            updateIcon();
+        })();
+    </script>
 </body>
 </html>
