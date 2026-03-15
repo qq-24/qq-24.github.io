@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>ComfyUI 工作流查看器</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; overflow: hidden; height: 100vh; }
+body.drag-mode { user-select: none; }
+
+#drop-zone {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 100; background: #1a1a2e;
+}
+#drop-zone.hidden { display: none; }
+#drop-zone .hint { border: 3px dashed #555; border-radius: 20px; padding: 80px 120px; text-align: center; font-size: 20px; color: #aaa; }
+#drop-zone.dragover .hint { border-color: #6ea8fe; color: #6ea8fe; }
+#drop-zone .hint p:last-child { font-size: 14px; margin-top: 12px; color: #666; }
+
+#viewport { position: absolute; inset: 0; overflow: hidden; display: none; cursor: grab; }
+#viewport.active { display: block; }
+#viewport.dragging { cursor: grabbing; }
+body.select-mode #viewport { cursor: default; }
+
+#world { position: absolute; transform-origin: 0 0; }
+
+/* 分组框 */
+.group-box { position: absolute; border: 2px solid; border-radius: 8px; pointer-events: none; }
+.group-title { position: absolute; top: -30px; left: 8px; font-weight: bold; white-space: nowrap; }
+
+/* 节点 */
+.node {
+  position: absolute; background: #2b2b3d; border: 1.5px solid #555;
+  border-radius: 6px; overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+body.drag-mode .node { pointer-events: auto; cursor: pointer; }
+body.drag-mode .node-header { cursor: pointer; }
+body.move-mode .node { pointer-events: auto; cursor: grab; }
+body.move-mode .node-header { cursor: grab; }
+body.select-mode .node { pointer-events: auto; cursor: text; }
+body.select-mode .node-header { cursor: pointer; }
+
+.node.selected { border-color: #fff; box-shadow: 0 0 14px rgba(255,255,255,0.35); z-index: 10; }
+.node.collapsed { border-radius: 14px; }
+
+/* 禁用节点 */
+.node.muted::after {
+  content: '已禁用'; position: absolute; inset: 0; border-radius: 5px;
+  background: rgba(100, 40, 160, 0.6); display: flex; align-items: center;
+  justify-content: center; color: #dbb0ff; font-size: 16px; font-weight: bold;
+  letter-spacing: 6px; text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  pointer-events: none; z-index: 5;
+}
+
+.node-header {
+  padding: 5px 10px; font-weight: bold; font-size: 13px;
+  color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  white-space: nowrap; overflow: hidden;
+}
+.node.collapsed .node-header { border-radius: 13px; }
+.node-header .nid { opacity: 0.6; font-size: 10px; font-weight: normal; }
+
+/* 节点内容区 */
+.node-content { display: flex; flex-direction: column; }
+
+/* 端口行：贴边 */
+.port-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 1px 0; min-height: 18px; position: relative;
+}
+.port-left, .port-right { display: flex; align-items: center; font-size: 12px; white-space: nowrap; }
+.port-left { padding-left: 2px; color: #f0c874; }
+.port-right { padding-right: 2px; color: #c4a8ff; }
+/* 端口圆点贴边 */
+.port-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid; display: inline-block;
+}
+.port-dot.input { border-color: #f0c874; background: #f0c87444; margin-right: 4px; }
+.port-dot.output { border-color: #c4a8ff; background: #c4a8ff44; margin-left: 4px; }
+.port-dot.connected.input { background: #f0c874; }
+.port-dot.connected.output { background: #c4a8ff; }
+
+/* widget 参数区 */
+.widgets { padding: 2px 8px 4px; border-top: 1px solid #3a3a50; }
+.widget-row {
+  display: flex; justify-content: space-between; padding: 2px 0;
+  border-bottom: 1px solid #333; gap: 8px; align-items: baseline;
+}
+.widget-row:last-child { border-bottom: none; }
+.wk { color: #7ab0ff; flex-shrink: 0; }
+.wv { color: #b8e6b8; text-align: right; word-break: break-all; line-height: 1.4; white-space: pre-wrap; }
+
+/* 连线在节点下面 */
+#links-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; z-index: -1; }
+#links-svg path { transition: opacity 0.15s, stroke-width 0.15s; }
+#links-svg.has-selection path { opacity: 0.06; stroke-width: 1.5; }
+#links-svg.has-selection path.highlight { opacity: 1; stroke-width: 3.5; z-index: 999; }
+
+#toolbar {
+  position: fixed; top: 10px; right: 10px; z-index: 200; display: none;
+  background: #2a2a3e; border-radius: 8px; padding: 6px; gap: 4px;
+  flex-direction: column; box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+#toolbar.active { display: flex; }
+#toolbar button {
+  background: #3a3a50; color: #ddd; border: none; border-radius: 4px;
+  padding: 5px 12px; cursor: pointer; font-size: 12px; pointer-events: auto;
+}
+#toolbar button:hover { background: #505068; }
+#toolbar button.active { background: #6a5acd; color: #fff; }
+
+#info {
+  position: fixed; bottom: 10px; left: 10px; z-index: 200; display: none;
+  background: #2a2a3ecc; border-radius: 6px; padding: 6px 12px; font-size: 12px; color: #aaa;
+}
+#info.active { display: block; }
+</style>
+</head>
+<body class="drag-mode">
+
+<div id="drop-zone">
+  <a href="../index.html" style="position:absolute;top:12px;left:12px;z-index:110;color:#aaa;text-decoration:none;font-size:14px;background:#2a2a3e;padding:6px 14px;border-radius:6px;display:flex;align-items:center;gap:4px;">← 返回主页</a>
+  <div class="hint">
+    <p>🖼️ 拖入 ComfyUI 生成的 PNG 图片</p>
+    <p>也支持 .json 工作流文件 · 点击选择文件</p>
+  </div>
+</div>
+
+<div id="viewport">
+  <div id="world">
+    <svg id="links-svg"></svg>
+  </div>
+</div>
+
+<div id="toolbar">
+  <button class="active" id="btn-drag" onclick="setMode('drag')">🖐 拖拽</button>
+  <button id="btn-move" onclick="setMode('move')">✥ 移动节点</button>
+  <button id="btn-select" onclick="setMode('select')">📋 选字</button>
+  <button onclick="fitView()">适应窗口</button>
+  <button onclick="resetView()">重置视图</button>
+  <button onclick="location.reload()">打开新图</button>
+</div>
+<div id="info"></div>
+
+<script>
+let currentMode = 'drag';
+function setMode(mode) {
+  currentMode = mode;
+  document.body.className = mode + '-mode';
+  document.getElementById('btn-drag').classList.toggle('active', mode === 'drag');
+  document.getElementById('btn-move').classList.toggle('active', mode === 'move');
+  document.getElementById('btn-select').classList.toggle('active', mode === 'select');
+}
+
+/* ===== PNG 解析 ===== */
+function parsePngMeta(buf) {
+  const view = new DataView(buf), res = {};
+  let off = 8;
+  while (off < buf.byteLength) {
+    const len = view.getUint32(off);
+    const type = String.fromCharCode(...new Uint8Array(buf, off + 4, 4));
+    if (type === 'tEXt' || type === 'iTXt') {
+      const data = new Uint8Array(buf, off + 8, len);
+      const ni = data.indexOf(0);
+      const key = new TextDecoder().decode(data.slice(0, ni));
+      let val;
+      if (type === 'tEXt') {
+        val = new TextDecoder().decode(data.slice(ni + 1));
+      } else {
+        let p = ni + 3;
+        p = data.indexOf(0, p) + 1;
+        p = data.indexOf(0, p) + 1;
+        val = new TextDecoder('utf-8').decode(data.slice(p));
+      }
+      res[key] = val;
+    }
+    off += 12 + len;
+  }
+  return res;
+}
+
+// 修复非法 JSON（NaN, Infinity, -Infinity, 尾逗号等）
+function safeJsonParse(str) {
+  const fixed = str
+    .replace(/\bNaN\b/g, 'null')
+    .replace(/\bInfinity\b/g, '1e308')
+    .replace(/\b-Infinity\b/g, '-1e308');
+  return JSON.parse(fixed);
+}
+
+/* ===== 颜色 ===== */
+const TYPE_COLORS = {
+  'MODEL':'#b07acc','CONDITIONING':'#c49a3c','LATENT':'#cc6699',
+  'IMAGE':'#6495ed','VAE':'#cc4444','CLIP':'#cccc44',
+  'CONTROL_NET':'#44cc88','MASK':'#66cccc','INT':'#6a9f6a',
+  'FLOAT':'#6a9f6a','STRING':'#6a9faa','SAMPLER':'#cc8844',
+  'SIGMAS':'#cc88cc','PIPE_LINE':'#7a7acc',
+};
+const PALETTE = ['#5a7fbb','#5a9e6f','#b49a3c','#b47a3c','#a85a6a','#7a6abf','#4a9a8a','#5a8ab0','#a07070','#7a7abf','#6a8a5a','#8a6a7a'];
+function typeColor(t) { return TYPE_COLORS[t] || hashColor(t); }
+function hashColor(t) { let h=0; for(let i=0;i<t.length;i++) h=((h<<5)-h+t.charCodeAt(i))|0; return PALETTE[Math.abs(h)%PALETTE.length]; }
+
+/* ===== 全局 ===== */
+let panX=0, panY=0, scale=1, selectedNodeId=null;
+const viewport = document.getElementById('viewport');
+const world = document.getElementById('world');
+const svgEl = document.getElementById('links-svg');
+
+function applyTransform() {
+  world.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+}
+
+function selectNode(nodeId) {
+  world.querySelectorAll('.node.selected').forEach(el => el.classList.remove('selected'));
+  selectedNodeId = nodeId;
+  const nodeEl = world.querySelector(`.node[data-id="${nodeId}"]`);
+  if (nodeEl) nodeEl.classList.add('selected');
+  svgEl.classList.add('has-selection');
+  svgEl.querySelectorAll('path').forEach(p => {
+    p.classList.toggle('highlight', p.dataset.from == nodeId || p.dataset.to == nodeId);
+  });
+}
+
+/* ===== 构建 widget 名称映射 ===== */
+function buildWidgetNames(promptData, nodes) {
+  const map = {};
+  nodes.forEach(n => {
+    if (!n.widgets_values) return;
+    const nameMap = {};
+
+    // 从 workflow inputs[].widget.name 获取名称（最完整的来源）
+    const wfNames = (n.inputs || [])
+      .filter(inp => inp.widget)
+      .map(inp => inp.widget.name);
+
+    // 从 prompt 获取 key:value（用于补充/验证）
+    const pNode = promptData?.[String(n.id)];
+    const promptKeys = pNode?.inputs
+      ? Object.keys(pNode.inputs).filter(k => !Array.isArray(pNode.inputs[k]))
+      : [];
+
+    if (wfNames.length > 0) {
+      // 用 wfNames 按顺序匹配 widgets_values，跳过控制值（randomize/fixed 等）
+      let ni = 0;
+      for (let i = 0; i < n.widgets_values.length && ni < wfNames.length; i++) {
+        nameMap[i] = wfNames[ni];
+        ni++;
+        const nextV = n.widgets_values[i + 1];
+        if (typeof nextV === 'string' && ['randomize','fixed','increment','decrement'].includes(nextV)) {
+          i++;
+          nameMap[i] = wfNames[ni - 1] + '_ctrl';
+        }
+      }
+    } else if (promptKeys.length > 0) {
+      // 没有 wfNames（如 prompt-only 模式），用 prompt keys 按值匹配
+      const pEntries = Object.entries(pNode.inputs).filter(([,v]) => !Array.isArray(v));
+      const used = new Set();
+      n.widgets_values.forEach((wv, i) => {
+        if (wv === null || wv === undefined) return;
+        for (let j = 0; j < pEntries.length; j++) {
+          if (used.has(j)) continue;
+          if (wv === pEntries[j][1] || (typeof wv === typeof pEntries[j][1] && String(wv) === String(pEntries[j][1]))) {
+            nameMap[i] = pEntries[j][0];
+            used.add(j);
+            break;
+          }
+        }
+      });
+      let nj = 0;
+      n.widgets_values.forEach((_, i) => {
+        if (nameMap[i]) return;
+        while (nj < pEntries.length && used.has(nj)) nj++;
+        if (nj < pEntries.length) { nameMap[i] = pEntries[nj][0]; used.add(nj); nj++; }
+      });
+    }
+
+    map[n.id] = nameMap;
+  });
+  return map;
+}
+
+/* ===== 渲染 ===== */
+let promptData = null;
+
+function renderWorkflow(wf) {
+  const nodes = wf.nodes || [], links = wf.links || [], groups = wf.groups || [];
+  const nodeById = {};
+  nodes.forEach(n => { nodeById[n.id] = n; });
+  const wnames = buildWidgetNames(promptData, nodes);
+
+  // 分组框
+  groups.forEach(g => {
+    const el = document.createElement('div');
+    el.className = 'group-box';
+    const b = g.bounding;
+    el.style.left=b[0]+'px'; el.style.top=b[1]+'px'; el.style.width=b[2]+'px'; el.style.height=b[3]+'px';
+    const col = g.color || '#555';
+    el.style.borderColor = col;
+    el.style.background = hexToRgba(col, 0.06);
+    const t = document.createElement('div');
+    t.className = 'group-title';
+    t.style.color = col==='#444'?'#999':col;
+    t.style.fontSize = (g.font_size||18)+'px';
+    t.textContent = g.title||'';
+    el.appendChild(t);
+    world.appendChild(el);
+  });
+
+  // 节点
+  const nodeEls = {};
+  nodes.forEach(n => {
+    const isCollapsed = n.flags?.collapsed;
+    const isMuted = n.mode===2 || n.mode===4;
+    const el = document.createElement('div');
+    el.className = 'node' + (isCollapsed?' collapsed':'') + (isMuted?' muted':'');
+    el.dataset.id = n.id;
+
+    const x = Array.isArray(n.pos)?n.pos[0]:(n.pos?.['0']??0);
+    const y = Array.isArray(n.pos)?n.pos[1]:(n.pos?.['1']??0);
+    el.style.left = x+'px'; el.style.top = y+'px';
+
+    const nodeW = Array.isArray(n.size)?n.size[0]:(n.size?.['0']??220);
+    const nodeH = Array.isArray(n.size)?n.size[1]:(n.size?.['1']??0);
+    el.style.width = nodeW+'px';
+    el.dataset.minH = nodeH; // 存原始高度
+    if (!isCollapsed && nodeH > 0) el.style.minHeight = nodeH+'px';
+
+    const col = hashColor(n.type||'');
+    const hdr = document.createElement('div');
+    hdr.className = 'node-header';
+    hdr.style.background = col;
+    hdr.innerHTML = `<span>${esc(n.title||n.type||'?')}</span><span class="nid">#${n.id}</span>`;
+    el.appendChild(hdr);
+
+    // 始终创建 content（折叠的默认隐藏）
+    const content = document.createElement('div');
+    content.className = 'node-content';
+    if (isCollapsed) content.style.display = 'none';
+
+    const pureInputs = [];
+    (n.inputs||[]).forEach(inp => { if(!inp.widget) pureInputs.push(inp); });
+    const outputs = n.outputs||[];
+    const maxPorts = Math.max(pureInputs.length, outputs.length);
+
+    for (let i = 0; i < maxPorts; i++) {
+      const row = document.createElement('div');
+      row.className = 'port-row';
+      const left = document.createElement('div');
+      left.className = 'port-left';
+      if (i < pureInputs.length) {
+        const inp = pureInputs[i];
+        const dot = document.createElement('span');
+        dot.className = 'port-dot input' + (inp.link!=null?' connected':'');
+        left.appendChild(dot);
+        const lbl = document.createElement('span');
+        lbl.textContent = inp.label || inp.name || '?';
+        left.appendChild(lbl);
+      }
+      row.appendChild(left);
+      const right = document.createElement('div');
+      right.className = 'port-right';
+      if (i < outputs.length) {
+        const out = outputs[i];
+        const lbl = document.createElement('span');
+        lbl.textContent = out.label || out.name || '?';
+        right.appendChild(lbl);
+        const dot = document.createElement('span');
+        dot.className = 'port-dot output' + (out.links?.length?' connected':'');
+        right.appendChild(dot);
+      }
+      row.appendChild(right);
+      content.appendChild(row);
+    }
+
+    if (n.widgets_values?.length) {
+      const sec = document.createElement('div'); sec.className='widgets';
+      const names = wnames[n.id] || {};
+      n.widgets_values.forEach((v, i) => {
+        if (v===null||v===undefined) return;
+        const s = typeof v==='object'?JSON.stringify(v):String(v);
+        if (s===''||s==='false') return;
+        const row = document.createElement('div'); row.className='widget-row';
+        row.dataset.widgetName = names[i] || '';
+        const label = names[i] || ('w'+i);
+        row.innerHTML = `<span class="wk">${esc(label)}</span><span class="wv">${esc(s)}</span>`;
+        sec.appendChild(row);
+      });
+      if (sec.children.length) content.appendChild(sec);
+    }
+
+    el.appendChild(content);
+
+    if (!isCollapsed) {
+      requestAnimationFrame(() => {
+        const contentH = content.scrollHeight;
+        const availH = Math.max(nodeH - 28, 40);
+        if (contentH > availH && availH > 0) {
+          const ratio = Math.max(availH / contentH, 0.55);
+          content.style.fontSize = Math.max(ratio * 13, 8) + 'px';
+        } else if (contentH < availH * 0.5 && availH > 60) {
+          const ratio = Math.min(availH / Math.max(contentH, 1), 2.0);
+          content.style.fontSize = Math.min(ratio * 13, 22) + 'px';
+        }
+      });
+    }
+
+    world.appendChild(el);
+    nodeEls[n.id] = el;
+  });
+
+  // 画连线 - 等字体缩放完成后
+  _linksData = links; _nodeById = nodeById; _nodeEls = nodeEls;
+  requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => {
+    drawLinks(links, nodeById, nodeEls);
+    fitView();
+  })));
+
+  document.getElementById('info').textContent = `节点: ${nodes.length} | 连接: ${links.length} | 分组: ${groups.length} · 点击标题高亮连线`;
+  document.getElementById('info').classList.add('active');
+}
+
+let _linksData, _nodeById, _nodeEls;
+function redrawLinks() {
+  if(_linksData) drawLinks(_linksData, _nodeById, _nodeEls);
+}
+function restoreHighlight() {
+  if(selectedNodeId != null) {
+    svgEl.classList.add('has-selection');
+    svgEl.querySelectorAll('path').forEach(p => {
+      p.classList.toggle('highlight', p.dataset.from == selectedNodeId || p.dataset.to == selectedNodeId);
+    });
+  }
+}
+
+function drawLinks(links, nodeById, nodeEls) {
+  let paths = '';
+  links.forEach(l => {
+    const [linkId, fromId, fromSlot, toId, toSlot, linkType] = l;
+    const fromEl = nodeEls[fromId], toEl = nodeEls[toId];
+    if (!fromEl || !toEl) return;
+    const fromNode = nodeById[fromId], toNode = nodeById[toId];
+    let x1, y1, x2, y2;
+
+    // 输出端
+    const fromContent = fromEl.querySelector('.node-content');
+    const fromIsCollapsed = !fromContent || fromContent.style.display === 'none';
+    if (fromIsCollapsed) {
+      x1 = fromEl.offsetLeft + fromEl.offsetWidth;
+      y1 = fromEl.offsetTop + fromEl.offsetHeight/2;
+    } else {
+      x1 = fromEl.offsetLeft + fromEl.offsetWidth;
+      const outDots = fromEl.querySelectorAll('.port-dot.output');
+      if (outDots[fromSlot]) {
+        const dot = outDots[fromSlot];
+        y1 = fromEl.offsetTop + getOffsetTop(dot, fromEl) + dot.offsetHeight/2;
+      } else {
+        y1 = fromEl.offsetTop + 28 + fromSlot*20 + 10;
+      }
+    }
+
+    // 输入端
+    const toContent = toEl.querySelector('.node-content');
+    const toIsCollapsed = !toContent || toContent.style.display === 'none';
+    if (toIsCollapsed) {
+      x2 = toEl.offsetLeft;
+      y2 = toEl.offsetTop + toEl.offsetHeight/2;
+    } else {
+      x2 = toEl.offsetLeft;
+      const toInput = toNode.inputs?.[toSlot];
+      if (toInput?.widget) {
+        // widget 输入 - 找到对应的 widget 行
+        const wName = toInput.widget.name;
+        const wRow = toEl.querySelector(`.widget-row[data-widget-name="${wName}"]`);
+        if (wRow) {
+          y2 = toEl.offsetTop + getOffsetTop(wRow, toEl) + wRow.offsetHeight/2;
+        } else {
+          y2 = toEl.offsetTop + 28;
+        }
+      } else {
+        // 找到在纯输入列表中的索引
+        let pureIdx = 0;
+        for (let i=0; i<toSlot; i++) { if(!toNode.inputs?.[i]?.widget) pureIdx++; }
+        const inDots = toEl.querySelectorAll('.port-dot.input');
+        if (inDots[pureIdx]) {
+          const dot = inDots[pureIdx];
+          y2 = toEl.offsetTop + getOffsetTop(dot, toEl) + dot.offsetHeight/2;
+        } else {
+          y2 = toEl.offsetTop + 28 + toSlot*20 + 10;
+        }
+      }
+    }
+
+    const dx = Math.max(Math.abs(x2-x1)*0.35, 40);
+    const col = typeColor(linkType||'*');
+    paths += `<path d="M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}" stroke="${col}" stroke-width="2.5" fill="none" opacity="0.75" data-from="${fromId}" data-to="${toId}" data-link="${linkId}"/>`;
+  });
+  svgEl.innerHTML = paths;
+}
+
+// 递归计算元素相对于祖先的 offsetTop
+function getOffsetTop(el, ancestor) {
+  let top = 0;
+  let cur = el;
+  while (cur && cur !== ancestor) {
+    top += cur.offsetTop;
+    cur = cur.offsetParent;
+    if (cur === ancestor) break;
+    // offsetParent 可能跳过中间层
+  }
+  return top;
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function hexToRgba(hex,a) {
+  hex=hex.replace('#','');
+  if(hex.length===3) hex=hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  return `rgba(${parseInt(hex.substring(0,2),16)},${parseInt(hex.substring(2,4),16)},${parseInt(hex.substring(4,6),16)},${a})`;
+}
+
+/* ===== 视图 ===== */
+function resetView() { panX=0;panY=0;scale=1;applyTransform(); }
+function fitView() {
+  const els=world.querySelectorAll('.node');
+  if(!els.length) return;
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  els.forEach(el => {
+    minX=Math.min(minX,el.offsetLeft); minY=Math.min(minY,el.offsetTop);
+    maxX=Math.max(maxX,el.offsetLeft+el.offsetWidth); maxY=Math.max(maxY,el.offsetTop+el.offsetHeight);
+  });
+  const pad=80,w=maxX-minX+pad*2,h=maxY-minY+pad*2;
+  scale=Math.min(window.innerWidth/w,window.innerHeight/h,1.5);
+  panX=(window.innerWidth-w*scale)/2-minX*scale+pad*scale;
+  panY=(window.innerHeight-h*scale)/2-minY*scale+pad*scale;
+  applyTransform();
+}
+
+let drag=false,dx0,dy0,startX,startY,didMove,clickedNodeId=null,clickedHeader=false;
+let dragNodeEl=null, dragNodeStartX, dragNodeStartY; // 节点拖拽
+
+viewport.addEventListener('pointerdown', e => {
+  if(e.target.closest('#toolbar')) return;
+  const nodeEl = e.target.closest('.node');
+  clickedNodeId = nodeEl ? nodeEl.dataset.id : null;
+  clickedHeader = !!e.target.closest('.node-header');
+  startX=e.clientX; startY=e.clientY;
+  didMove=false;
+
+  // 选择模式下点节点内容不启动拖拽
+  if(currentMode==='select' && nodeEl && !clickedHeader) return;
+
+  drag=true;
+  dx0=e.clientX-panX; dy0=e.clientY-panY;
+
+  // 如果点了节点且是移动模式，准备拖节点
+  if(nodeEl && currentMode==='move') {
+    dragNodeEl = nodeEl;
+    dragNodeStartX = nodeEl.offsetLeft;
+    dragNodeStartY = nodeEl.offsetTop;
+  }
+
+  viewport.classList.add('dragging');
+  viewport.setPointerCapture(e.pointerId);
+});
+
+viewport.addEventListener('pointermove', e => {
+  if(!drag) return;
+  const mx=Math.abs(e.clientX-startX), my=Math.abs(e.clientY-startY);
+  if(mx>3||my>3) didMove=true;
+  if(!didMove) return;
+
+  if(dragNodeEl) {
+    // 拖动节点
+    const dx=(e.clientX-startX)/scale, dy=(e.clientY-startY)/scale;
+    dragNodeEl.style.left = (dragNodeStartX+dx)+'px';
+    dragNodeEl.style.top = (dragNodeStartY+dy)+'px';
+  } else {
+    // 拖动画布
+    panX=e.clientX-dx0; panY=e.clientY-dy0;
+    applyTransform();
+  }
+});
+
+viewport.addEventListener('pointerup', e => {
+  drag=false; viewport.classList.remove('dragging');
+
+  if(dragNodeEl && didMove) {
+    redrawLinks();
+    restoreHighlight();
+  }
+
+  if(!didMove) {
+    if(clickedNodeId) {
+      selectNode(parseInt(clickedNodeId));
+      if(clickedHeader) {
+        const el = world.querySelector(`.node[data-id="${clickedNodeId}"]`);
+        const content = el?.querySelector('.node-content');
+        if(content) {
+          const hiding = content.style.display !== 'none';
+          content.style.display = hiding ? 'none' : '';
+          el.classList.toggle('collapsed', hiding);
+          if(hiding) {
+            el.style.minHeight = '';
+          } else {
+            const h = el.dataset.minH;
+            if(h && +h > 0) el.style.minHeight = h + 'px';
+          }
+          // 折叠/展开后重绘连线并恢复高亮
+          requestAnimationFrame(() => {
+            redrawLinks();
+            restoreHighlight();
+          });
+        }
+      }
+    } else {
+      selectedNodeId=null;
+      world.querySelectorAll('.node.selected').forEach(el=>el.classList.remove('selected'));
+      svgEl.classList.remove('has-selection');
+      svgEl.querySelectorAll('path').forEach(p=>p.classList.remove('highlight'));
+    }
+  }
+  clickedNodeId=null; clickedHeader=false; dragNodeEl=null;
+});
+viewport.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f=e.deltaY>0?0.9:1.1, ns=Math.max(0.02,Math.min(8,scale*f));
+  panX=e.clientX-(e.clientX-panX)*(ns/scale);
+  panY=e.clientY-(e.clientY-panY)*(ns/scale);
+  scale=ns; applyTransform();
+}, {passive:false});
+
+/* ===== 文件 ===== */
+const dropZone=document.getElementById('drop-zone');
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('dragover');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('dragover');if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0]);});
+dropZone.addEventListener('click',()=>{
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/png,.json';
+  inp.onchange=()=>{if(inp.files[0])loadFile(inp.files[0]);};inp.click();
+});
+
+function loadFile(file) {
+  if(file.name.endsWith('.json')){
+    file.text().then(t=>{try{promptData=null;show(JSON.parse(t));}catch(e){alert('JSON 解析失败: '+e.message);}});
+    return;
+  }
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const m=parsePngMeta(r.result);
+      promptData = m.prompt ? safeJsonParse(m.prompt) : null;
+      let wf=m.workflow?safeJsonParse(m.workflow):promptData?promptToWf(promptData):null;
+      if(!wf){alert('未找到工作流信息');return;}
+      show(wf);
+    }catch(e){alert('解析失败: '+e.message);console.error(e);}
+  };
+  r.readAsArrayBuffer(file);
+}
+
+function promptToWf(prompt) {
+  const nodes=[],links=[];let lid=1;
+  const entries=Object.entries(prompt), cols=Math.ceil(Math.sqrt(entries.length));
+  entries.forEach(([id,data],idx)=>{
+    const node={id:+id,type:data.class_type,title:data._meta?.title,pos:[(idx%cols)*350,Math.floor(idx/cols)*280],size:[280,150],inputs:[],outputs:[],widgets_values:[],properties:{}};
+    if(data.inputs){
+      Object.entries(data.inputs).forEach(([k,v])=>{
+        if(Array.isArray(v)){node.inputs.push({name:k,type:'*',link:lid});links.push([lid,+v[0],v[1],+id,node.inputs.length-1,'*']);lid++;}
+        else{node.widgets_values.push(v);node.properties[k]=v;}
+      });
+    }
+    nodes.push(node);
+  });
+  return {nodes,links,groups:[]};
+}
+
+function show(wf) {
+  dropZone.classList.add('hidden');
+  viewport.classList.add('active');
+  document.getElementById('toolbar').classList.add('active');
+  renderWorkflow(wf);
+}
+</script>
+</body>
+</html>
