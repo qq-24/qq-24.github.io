@@ -225,6 +225,7 @@ body.select-mode .node-header { cursor: pointer; }
     <textarea id="summary-text" readonly></textarea>
     <div class="btns">
       <button onclick="document.getElementById('summary-overlay').classList.remove('active');if(!viewport.classList.contains('active'))document.getElementById('mode-select').classList.add('active')">返回</button>
+      <button onclick="appendAIPrompt(this)">+ 附加AI提示词</button>
       <button class="primary" onclick="navigator.clipboard.writeText(document.getElementById('summary-text').value).then(()=>this.textContent='已复制!').catch(()=>{document.getElementById('summary-text').select();document.execCommand('copy');this.textContent='已复制!'})">复制到剪贴板</button>
     </div>
   </div>
@@ -881,6 +882,43 @@ function generateSummary() {
 
   document.getElementById('summary-text').value = lines.join('\n');
   document.getElementById('summary-overlay').classList.add('active');
+}
+
+const AI_PROMPT = `
+---
+请根据以上 ComfyUI 工作流信息，用结构化的方式总结以下内容：
+
+1. **生成流程概述**：简要描述从输入到最终输出的完整生图流程，按执行顺序说明每个关键步骤的作用。
+
+2. **模型与资源**：
+   - 主模型（Checkpoint）
+   - LoRA（名称、权重）
+   - ControlNet（如有）
+   - VAE（如有单独指定）
+
+3. **提示词**：
+   - 正面提示词（完整列出）
+   - 负面提示词（完整列出）
+   - 如有多组提示词或条件组合，分别列出并说明用途
+
+4. **关键生成参数**：
+   - 图像尺寸、采样器、调度器、步数、CFG、种子
+   - 如有多次采样（如高清修复/细分），分别列出各阶段参数
+
+5. **后处理**：放大、细分修复、面部修复等（如有）
+
+要求：信息完整准确，直接从工作流数据中提取，不要猜测或编造。只关注实际生效的节点（忽略已禁用的节点）。最后可以简要提一下被禁用的节点可能是什么用途。
+`.trim();
+
+function appendAIPrompt(btn) {
+  const ta = document.getElementById('summary-text');
+  if (ta.value.includes('请根据以上 ComfyUI 工作流信息')) {
+    btn.textContent = '已附加';
+    return;
+  }
+  ta.value += '\n\n' + AI_PROMPT;
+  ta.scrollTop = ta.scrollHeight;
+  btn.textContent = '已附加';
 }
 
 function show(wf) {
