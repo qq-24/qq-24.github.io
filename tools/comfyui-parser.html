@@ -954,18 +954,19 @@ function findLatentSize(startNodeId, apiData, mutedNodes, visited = new Set()) {
     if (mutedNodes.has(startNodeId)) return null;
     const node = apiData[startNodeId];
     if (!node) return null;
-
-    if (node.class_type === 'EmptyLatentImage') {
-        const w = node.inputs?.width;
-        const h = node.inputs?.height;
-        if (typeof w === 'number' && typeof h === 'number') return { width: w, height: h };
-    }
-    const inputs = node.inputs || {};
-    const keys = Object.keys(inputs).sort();
-    for (const k of keys) {
-        const v = inputs[k];
+    const ins = node.inputs || {};
+    // 任何节点有数值型 width+height
+    let w = ins.width, h = ins.height;
+    if (typeof w === 'number' && typeof h === 'number') return { width: w, height: h };
+    // width/height 是连接引用，递归解析
+    if (Array.isArray(w)) w = resolveScalarFromNode(w[0], apiData, mutedNodes);
+    if (Array.isArray(h)) h = resolveScalarFromNode(h[0], apiData, mutedNodes);
+    if (typeof w === 'number' && typeof h === 'number') return { width: w, height: h };
+    // 继续向上游找
+    for (const k of Object.keys(ins).sort()) {
+        const v = ins[k];
         if (Array.isArray(v) && typeof v[0] === 'string') {
-            const res = findLatentSize(v[0], apiData, mutedNodes, visited);
+            const res = findLatentSize(v[0], apiData, mutedNodes, new Set(visited));
             if (res) return res;
         }
     }
@@ -982,7 +983,7 @@ function findModelName(startNodeId, apiData, mutedNodes, visited = new Set()) {
     const ins = node.inputs || {};
 
     if (/CheckpointLoader/i.test(cls) || /ModelLoader/i.test(cls) || /UNETLoader/i.test(cls) || /Load Checkpoint/i.test(cls)) {
-        const candidates = ['ckpt_name','model_name','checkpoint','ckpt','filename','file','model','ckptfile'];
+        const candidates = ['ckpt_name','unet_name','model_name','checkpoint','ckpt','filename','file','model','ckptfile'];
         for (const k of candidates) {
             const val = ins[k];
             if (typeof val === 'string' && val) return val;
@@ -1003,12 +1004,22 @@ function collectLoras(apiData, mutedNodes) {
         if (mutedNodes.has(id)) continue;
         const n = apiData[id];
         const cls = n.class_type || '';
+        const ins = n.inputs || {};
         if (/LoraLoader/i.test(cls)) {
-            const name = n.inputs?.lora_name || n.inputs?.loraname || n.inputs?.lora_model_name || n.inputs?.name;
-            const strength = (typeof n.inputs?.strength_model === 'number') ? trimFloat(n.inputs.strength_model)
-                          : (typeof n.inputs?.strength === 'number') ? trimFloat(n.inputs.strength)
+            const name = ins.lora_name || ins.loraname || ins.lora_model_name || ins.name;
+            const strength = (typeof ins.strength_model === 'number') ? trimFloat(ins.strength_model)
+                          : (typeof ins.strength === 'number') ? trimFloat(ins.strength)
                           : undefined;
             if (name) out.push({ name, strength });
+        }
+        if (/loraStack|lora.*stack/i.test(cls)) {
+            for (let i = 1; i <= 50; i++) {
+                const lname = ins[`lora_${i}_name`];
+                if (lname === undefined) break;
+                if (!lname || lname === 'None') continue;
+                const s = ins[`lora_${i}_model_strength`] ?? ins[`lora_${i}_strength`];
+                out.push({ name: lname, strength: typeof s === 'number' ? trimFloat(s) : undefined });
+            }
         }
     }
     return out;
