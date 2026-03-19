@@ -725,7 +725,9 @@ dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.a
 dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('dragover'));
 dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('dragover');if(e.dataTransfer.files[0])loadFile(e.dataTransfer.files[0]);});
 dropZone.addEventListener('click',()=>{
-  const inp=document.createElement('input');inp.type='file';inp.accept='image/png,.json';
+  const inp=document.createElement('input');inp.type='file';
+  const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+  inp.accept=isMobile?'image/*':'image/png,.json';
   inp.onchange=()=>{if(inp.files[0])loadFile(inp.files[0]);};inp.click();
 });
 
