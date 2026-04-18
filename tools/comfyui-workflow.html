@@ -244,6 +244,22 @@ function setMode(mode) {
 }
 
 /* ===== PNG 解析 ===== */
+function parseWebpMeta(buf) {
+  const data = new Uint8Array(buf), res = {};
+  for (let i = 12; i < data.length - 8; i++) {
+    if (data[i]===0x45 && data[i+1]===0x58 && data[i+2]===0x49 && data[i+3]===0x46) {
+      const size = data[i+4] | (data[i+5]<<8) | (data[i+6]<<16) | (data[i+7]<<24);
+      const exif = new TextDecoder().decode(data.slice(i+8, i+8+size));
+      for (const p of exif.split('\0\0')) {
+        if (p.startsWith('Workflow:')) res.workflow = p.slice(9);
+        else if (p.startsWith('Prompt:')) res.prompt = p.slice(7);
+      }
+      break;
+    }
+  }
+  return res;
+}
+
 function parsePngMeta(buf) {
   const view = new DataView(buf), res = {};
   let off = 8;
@@ -727,7 +743,7 @@ dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remov
 dropZone.addEventListener('click',()=>{
   const inp=document.createElement('input');inp.type='file';
   const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
-  inp.accept=isMobile?'image/*':'image/png,.json';
+  inp.accept=isMobile?'image/*':'image/png,image/webp,.json';
   inp.onchange=()=>{if(inp.files[0])loadFile(inp.files[0]);};inp.click();
 });
 
@@ -739,7 +755,7 @@ function loadFile(file) {
   const r=new FileReader();
   r.onload=()=>{
     try{
-      const m=parsePngMeta(r.result);
+      const m = file.name.endsWith('.webp') ? parseWebpMeta(r.result) : parsePngMeta(r.result);
       promptData = m.prompt ? safeJsonParse(m.prompt) : null;
       let wf=m.workflow?safeJsonParse(m.workflow):promptData?promptToWf(promptData):null;
       if(!wf){alert('未找到工作流信息');return;}
