@@ -179,7 +179,7 @@ body.select-mode .node-header { cursor: pointer; }
 <div id="drop-zone">
   <a href="../index.html" style="position:absolute;top:12px;left:12px;z-index:110;color:#aaa;text-decoration:none;font-size:14px;background:#2a2a3e;padding:6px 14px;border-radius:6px;display:flex;align-items:center;gap:4px;">← 返回主页</a>
   <div class="hint">
-    <p>🖼️ 拖入 ComfyUI 生成的 PNG / JSON 文件</p>
+    <p>🖼️ 拖入 ComfyUI 生成的 PNG / WebP / JSON 文件</p>
     <p>或点击此处选择文件</p>
   </div>
 </div>
@@ -330,57 +330,65 @@ function selectNode(nodeId) {
 
 /* ===== 构建 widget 名称映射 ===== */
 function buildWidgetNames(promptData, nodes) {
+  const CTRL = new Set(['randomize','fixed','increment','decrement']);
   const map = {};
   nodes.forEach(n => {
     if (!n.widgets_values) return;
     const nameMap = {};
-
-    // 从 workflow inputs[].widget.name 获取名称（最完整的来源）
-    const wfNames = (n.inputs || [])
-      .filter(inp => inp.widget)
-      .map(inp => inp.widget.name);
-
-    // 从 prompt 获取 key:value（用于补充/验证）
+    const wv = n.widgets_values;
     const pNode = promptData?.[String(n.id)];
-    const promptKeys = pNode?.inputs
-      ? Object.keys(pNode.inputs).filter(k => !Array.isArray(pNode.inputs[k]))
+    // prompt 里非数组值 = widget 参数（最可靠的名称来源）
+    const pEntries = pNode?.inputs
+      ? Object.entries(pNode.inputs).filter(([,v]) => !Array.isArray(v))
       : [];
 
-    if (wfNames.length > 0) {
-      // 用 wfNames 按顺序匹配 widgets_values，跳过控制值（randomize/fixed 等）
-      let ni = 0;
-      for (let i = 0; i < n.widgets_values.length && ni < wfNames.length; i++) {
-        nameMap[i] = wfNames[ni];
-        ni++;
-        const nextV = n.widgets_values[i + 1];
-        if (typeof nextV === 'string' && ['randomize','fixed','increment','decrement'].includes(nextV)) {
-          i++;
-          nameMap[i] = wfNames[ni - 1] + '_ctrl';
-        }
-      }
-    } else if (promptKeys.length > 0) {
-      // 没有 wfNames（如 prompt-only 模式），用 prompt keys 按值匹配
-      const pEntries = Object.entries(pNode.inputs).filter(([,v]) => !Array.isArray(v));
+    if (pEntries.length > 0) {
+      // 按值精确匹配 prompt key → widgets_values index
       const used = new Set();
-      n.widgets_values.forEach((wv, i) => {
-        if (wv === null || wv === undefined) return;
+      // pass 1: 精确匹配
+      for (let i = 0; i < wv.length; i++) {
+        if (wv[i] === null || wv[i] === undefined) continue;
+        if (typeof wv[i] === 'string' && CTRL.has(wv[i])) continue;
         for (let j = 0; j < pEntries.length; j++) {
           if (used.has(j)) continue;
-          if (wv === pEntries[j][1] || (typeof wv === typeof pEntries[j][1] && String(wv) === String(pEntries[j][1]))) {
-            nameMap[i] = pEntries[j][0];
-            used.add(j);
-            break;
+          const [pk, pv] = pEntries[j];
+          if (wv[i] === pv || (typeof wv[i] === typeof pv && String(wv[i]) === String(pv))) {
+            nameMap[i] = pk; used.add(j); break;
           }
         }
-      });
+      }
+      // pass 2: 用 workflow widget.name 补全连线的 widget（prompt 里是数组引用）
+      const wfNames = (n.inputs || []).filter(inp => inp.widget).map(inp => inp.widget.name);
+      for (const wn of wfNames) {
+        if (Object.values(nameMap).includes(wn)) continue;
+        // 找第一个未命名的 slot
+        for (let i = 0; i < wv.length; i++) {
+          if (nameMap[i]) continue;
+          if (typeof wv[i] === 'string' && CTRL.has(wv[i])) continue;
+          nameMap[i] = wn;
+          if (i+1 < wv.length && typeof wv[i+1] === 'string' && CTRL.has(wv[i+1])) nameMap[i+1] = wn + '_ctrl';
+          break;
+        }
+      }
+      // pass 3: 未匹配的按顺序填充剩余 prompt key
       let nj = 0;
-      n.widgets_values.forEach((_, i) => {
-        if (nameMap[i]) return;
+      for (let i = 0; i < wv.length; i++) {
+        if (nameMap[i]) continue;
+        if (typeof wv[i] === 'string' && CTRL.has(wv[i])) continue;
         while (nj < pEntries.length && used.has(nj)) nj++;
         if (nj < pEntries.length) { nameMap[i] = pEntries[nj][0]; used.add(nj); nj++; }
-      });
+      }
+    } else {
+      // 无 prompt 数据，用 workflow inputs[].widget.name
+      const wfNames = (n.inputs || []).filter(inp => inp.widget).map(inp => inp.widget.name);
+      let ni = 0;
+      for (let i = 0; i < wv.length && ni < wfNames.length; i++) {
+        nameMap[i] = wfNames[ni]; ni++;
+        if (i+1 < wv.length && typeof wv[i+1] === 'string' && CTRL.has(wv[i+1])) {
+          i++; nameMap[i] = wfNames[ni-1] + '_ctrl';
+        }
+      }
     }
-
     map[n.id] = nameMap;
   });
   return map;
