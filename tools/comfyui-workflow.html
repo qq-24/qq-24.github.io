@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ComfyUI 工作流查看器</title>
+<title>AI 图片解析器</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; overflow: hidden; height: 100vh; }
@@ -179,8 +179,8 @@ body.select-mode .node-header { cursor: pointer; }
 <div id="drop-zone">
   <a href="../index.html" style="position:absolute;top:12px;left:12px;z-index:110;color:#aaa;text-decoration:none;font-size:14px;background:#2a2a3e;padding:6px 14px;border-radius:6px;display:flex;align-items:center;gap:4px;">← 返回主页</a>
   <div class="hint">
-    <p>🖼️ 拖入 ComfyUI 生成的 PNG / WebP / JSON 文件</p>
-    <p>或点击此处选择文件</p>
+    <p>🖼️ 拖入 AI 生成的图片（PNG / WebP）或工作流 JSON</p>
+    <p>支持 ComfyUI 和 WebUI (A1111) 格式</p>
   </div>
 </div>
 
@@ -764,6 +764,10 @@ function loadFile(file) {
   r.onload=()=>{
     try{
       const m = file.name.endsWith('.webp') ? parseWebpMeta(r.result) : parsePngMeta(r.result);
+      // WebUI 格式：有 parameters 字段，无 workflow/prompt
+      if(m.parameters && !m.workflow && !m.prompt){
+        showWebUI(m.parameters); return;
+      }
       promptData = m.prompt ? safeJsonParse(m.prompt) : null;
       let wf=m.workflow?safeJsonParse(m.workflow):promptData?promptToWf(promptData):null;
       if(!wf){alert('未找到工作流信息');return;}
@@ -771,6 +775,33 @@ function loadFile(file) {
     }catch(e){alert('解析失败: '+e.message);console.error(e);}
   };
   r.readAsArrayBuffer(file);
+}
+
+function showWebUI(raw) {
+  const lines = raw.split('\n');
+  const negIdx = lines.findIndex(l => l.startsWith('Negative prompt:'));
+  const paramIdx = lines.findIndex(l => l.startsWith('Steps:'));
+  let pos = '', neg = '', params = '';
+  if (negIdx !== -1) {
+    pos = lines.slice(0, negIdx).join('\n');
+    neg = lines.slice(negIdx, paramIdx !== -1 ? paramIdx : lines.length).join('\n').replace('Negative prompt:', '').trim();
+  } else if (paramIdx !== -1) {
+    pos = lines.slice(0, paramIdx).join('\n');
+  } else { pos = raw; }
+  if (paramIdx !== -1) params = lines.slice(paramIdx).join('\n');
+  const extract = k => { const m = params.match(new RegExp(k + ':\\s*([^,]+)')); return m ? m[1].trim() : ''; };
+  const out = ['# WebUI (A1111) 生成信息', ''];
+  out.push('## 参数');
+  for (const [label, key] of [['Model', 'Model'], ['Steps', 'Steps'], ['Sampler', 'Sampler'], ['Schedule', 'Schedule type'], ['CFG', 'CFG scale'], ['Seed', 'Seed'], ['Size', 'Size'], ['Denoise', 'Denoising strength'], ['Clip skip', 'Clip skip'], ['Model hash', 'Model hash']]) {
+    const v = extract(key); if (v && v !== '??') out.push(`  ${label}: ${v}`);
+  }
+  out.push('', '## 正向提示词', pos.trim(), '', '## 负向提示词', neg.trim() || '(无)');
+  // LoRA/Hires 等额外参数
+  const extras = params.replace(/^Steps:.*$/, '').trim();
+  if (extras) { out.push('', '## 原始参数', params.trim()); }
+  dropZone.classList.add('hidden');
+  document.getElementById('summary-text').value = out.join('\n');
+  document.getElementById('summary-overlay').classList.add('active');
 }
 
 function promptToWf(prompt) {
