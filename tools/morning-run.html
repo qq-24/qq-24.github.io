@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>22天晨跑打卡 · 满分冲刺</title>
+    <style>
+        :root {
+            --bg: #0f0f0f;
+            --card: #1a1a1a;
+            --text: #e0e0e0;
+            --accent: #4ade80;
+            --accent-dim: #1b3a2a;
+            --warn: #f59e0b;
+            --danger: #ef4444;
+            --muted: #6b7280;
+            --border: #2a2a2a;
+            --radius: 16px;
+            --radius-sm: 10px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 16px;
+            max-width: 500px;
+            margin: 0 auto;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* 头部 */
+        .header {
+            text-align: center;
+            padding: 20px 0 12px;
+        }
+        .header .icon {
+            font-size: 48px;
+            margin-bottom: 4px;
+        }
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .header .sub {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        /* 倒计时卡片 */
+        .countdown-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 16px;
+            text-align: center;
+            margin-bottom: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+        .countdown-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), #34d399);
+            border-radius: 3px 3px 0 0;
+        }
+        .countdown-label {
+            font-size: 0.75rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 8px;
+        }
+        .countdown-date {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+        .countdown-grid {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+        .countdown-item {
+            background: #111;
+            border-radius: var(--radius-sm);
+            padding: 10px 6px;
+            min-width: 56px;
+            text-align: center;
+        }
+        .countdown-num {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #fff;
+            font-variant-numeric: tabular-nums;
+            font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+        }
+        .countdown-unit {
+            font-size: 0.65rem;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+
+        /* 进度概览卡片 */
+        .overview-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 16px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .overview-item {
+            text-align: center;
+        }
+        .overview-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1;
+        }
+        .overview-value.green {
+            color: var(--accent);
+        }
+        .overview-label {
+            font-size: 0.7rem;
+            color: var(--muted);
+            margin-top: 4px;
+        }
+        .overview-divider {
+            width: 1px;
+            background: var(--border);
+            justify-self: center;
+        }
+
+        /* 进度条 */
+        .progress-wrap {
+            margin-bottom: 16px;
+        }
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 0.75rem;
+        }
+        .progress-info .percent {
+            color: var(--accent);
+            font-weight: 700;
+        }
+        .progress-bar {
+            height: 10px;
+            background: #1a1a1a;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4ade80, #22c55e);
+            border-radius: 5px;
+            transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 里程碑标记 */
+        .milestones {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 6px;
+            font-size: 0.6rem;
+            color: var(--muted);
+            position: relative;
+        }
+        .milestone {
+            position: relative;
+        }
+        .milestone.reached {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        /* 打卡网格 */
+        .grid-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #aaa;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .grid-title span {
+            color: var(--accent);
+        }
+        .checkin-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        @media (min-width: 420px) {
+            .checkin-grid {
+                grid-template-columns: repeat(7, 1fr);
+            }
+        }
+        .checkin-day {
+            aspect-ratio: 1;
+            background: #1a1a1a;
+            border: 2px solid transparent;
+            border-radius: var(--radius-sm);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+            -webkit-tap-highlight-color: transparent;
+            min-width: 0;
+        }
+        .checkin-day:active {
+            transform: scale(0.92);
+        }
+        .checkin-day.checked {
+            background: var(--accent-dim);
+            border-color: var(--accent);
+        }
+        .checkin-day.today {
+            border-color: var(--warn);
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+        }
+        .checkin-day .day-num {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #999;
+        }
+        .checkin-day.checked .day-num {
+            color: var(--accent);
+        }
+        .checkin-day.today .day-num {
+            color: var(--warn);
+        }
+        .checkin-day .day-icon {
+            font-size: 0.6rem;
+            margin-top: 1px;
+        }
+        .checkin-day.checked .day-icon {
+            opacity: 1;
+        }
+
+        /* 底部按钮 */
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+        .btn {
+            flex: 1;
+            padding: 14px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            letter-spacing: 0.3px;
+            transition: all 0.15s ease;
+        }
+        .btn-checkin {
+            background: var(--accent);
+            color: #000;
+        }
+        .btn-checkin:active {
+            background: #22c55e;
+            transform: scale(0.96);
+        }
+        .btn-checkin:disabled {
+            background: #1a3a1f;
+            color: #4a7a4a;
+            cursor: not-allowed;
+        }
+        .btn-reset {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--muted);
+        }
+        .btn-reset:active {
+            background: #1a1a1a;
+        }
+
+        /* 目标摘要卡片 */
+        .goal-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            font-size: 0.78rem;
+            color: #aaa;
+            line-height: 1.6;
+        }
+        .goal-card strong {
+            color: #fff;
+        }
+        .goal-highlight {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: #fff;
+            padding: 10px 22px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            z-index: 99;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        .toast.show {
+            opacity: 1;
+        }
+        .toast.success {
+            background: var(--accent);
+            color: #000;
+        }
+
+        /* 庆祝 */
+        .celebrate {
+            animation: pulse 0.6s ease;
+        }
+        @keyframes pulse {
+            0%,
+            100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.04);
+            }
+        }
+
+        /* 底部信息 */
+        .footer-info {
+            text-align: center;
+            font-size: 0.65rem;
+            color: #3a3a3a;
+            padding-bottom: 20px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="icon">🌅</div>
+        <h1>22天晨跑打卡</h1>
+        <div class="sub">方案一 · 冲刺满分20分</div>
+    </div>
+
+    <!-- 倒计时 -->
+    <div class="countdown-card">
+        <div class="countdown-label">⏳ 距离 6月7日 截止</div>
+        <div class="countdown-date" id="deadlineDisplay">2026年6月7日</div>
+        <div class="countdown-grid">
+            <div class="countdown-item">
+                <div class="countdown-num" id="cd-days">00</div>
+                <div class="countdown-unit">天</div>
+            </div>
+            <div class="countdown-item">
+                <div class="countdown-num" id="cd-hours">00</div>
+                <div class="countdown-unit">时</div>
+            </div>
+            <div class="countdown-item">
+                <div class="countdown-num" id="cd-mins">00</div>
+                <div class="countdown-unit">分</div>
+            </div>
+            <div class="countdown-item">
+                <div class="countdown-num" id="cd-secs">00</div>
+                <div class="countdown-unit">秒</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 进度概览 -->
+    <div class="overview-card">
+        <div class="overview-item">
+            <div class="overview-value green" id="doneCount">0</div>
+            <div class="overview-label">✅ 已完成</div>
+        </div>
+        <div class="overview-item">
+            <div class="overview-value" id="remainCount">22</div>
+            <div class="overview-label">📌 剩余</div>
+        </div>
+    </div>
+
+    <!-- 进度条 -->
+    <div class="progress-wrap">
+        <div class="progress-info">
+            <span>完成度</span>
+            <span class="percent" id="percentText">0%</span>
+        </div>
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+        </div>
+        <div class="milestones">
+            <span class="milestone" id="ms-6">6天</span>
+            <span class="milestone" id="ms-12">12天</span>
+            <span class="milestone" id="ms-18">18天</span>
+            <span class="milestone" id="ms-22">🏁22天</span>
+        </div>
+    </div>
+
+    <!-- 打卡网格 -->
+    <div class="grid-title">📅 打卡记录 <span id="gridSummary"></span></div>
+    <div class="checkin-grid" id="checkinGrid"></div>
+
+    <!-- 按钮 -->
+    <div class="btn-row">
+        <button class="btn btn-checkin" id="btnCheckin" onclick="toggleToday()">☀️ 今日打卡</button>
+        <button class="btn btn-reset" onclick="resetAll()">↺ 重置</button>
+    </div>
+
+    <!-- 目标摘要 -->
+    <div class="goal-card" id="goalCard">
+        📊 <strong>当前进度</strong>：<span class="goal-highlight" id="goalSummary">0/22天</span><br>
+        📐 <strong>预估总分</strong>：里程 <span class="goal-highlight" id="estMileage">64km</span> → 目标 170km | 天数 <span class="goal-highlight" id="estDays">28天</span> → 目标 34天<br>
+        🏆 <strong>状态</strong>：<span id="goalStatus">还没开始冲刺</span>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- 底部 -->
+    <div class="footer-info">
+        数据保存在本地 · 6月7日截止 · 加油💪
+    </div>
+
+    <script>
+        (function() {
+            // ============ 配置 ============
+            const TOTAL_DAYS = 22;
+            const DEADLINE = new Date('2026-06-07T23:00:00+08:00'); // 6月7日 23:00
+            const START_DATE = new Date('2026-05-13'); // 5月13日开始算
+            const BASE_DAYS = 28; // 已有有效天数
+            const BASE_MILEAGE = 64; // 已有有效里程
+            const TARGET_DAYS = 34;
+            const TARGET_MILEAGE = 170;
+            const MILEAGE_PER_CHECKIN = 5; // 晨跑翻倍后每次+5km
+
+            // ============ 本地存储 ============
+            const STORAGE_KEY = 'morning_run_22_checkin';
+
+            function loadData() {
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    if (raw) {
+                        const data = JSON.parse(raw);
+                        if (Array.isArray(data) && data.length === TOTAL_DAYS) {
+                            return data;
+                        }
+                    }
+                } catch (e) {}
+                // 默认全 false
+                return new Array(TOTAL_DAYS).fill(false);
+            }
+
+            function saveData(data) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            }
+
+            let checkinData = loadData();
+
+            // ============ DOM引用 ============
+            const $grid = document.getElementById('checkinGrid');
+            const $doneCount = document.getElementById('doneCount');
+            const $remainCount = document.getElementById('remainCount');
+            const $percentText = document.getElementById('percentText');
+            const $progressFill = document.getElementById('progressFill');
+            const $gridSummary = document.getElementById('gridSummary');
+            const $btnCheckin = document.getElementById('btnCheckin');
+            const $goalSummary = document.getElementById('goalSummary');
+            const $estMileage = document.getElementById('estMileage');
+            const $estDays = document.getElementById('estDays');
+            const $goalStatus = document.getElementById('goalStatus');
+            const $toast = document.getElementById('toast');
+            const $cdDays = document.getElementById('cd-days');
+            const $cdHours = document.getElementById('cd-hours');
+            const $cdMins = document.getElementById('cd-mins');
+            const $cdSecs = document.getElementById('cd-secs');
+
+            // ============ 工具函数 ============
+            function getTodayIndex() {
+                const now = new Date();
+                // 计算从 START_DATE 开始的天数偏移
+                const start = new Date(START_DATE);
+                start.setHours(0, 0, 0, 0);
+                const today = new Date(now);
+                today.setHours(0, 0, 0, 0);
+                const diff = Math.floor((today - start) / (1000 * 60 * 60 * 24));
+                return diff; // 0 = 5月13日, 1 = 5月14日, ...
+            }
+
+            function countChecked() {
+                return checkinData.filter(v => v === true).length;
+            }
+
+            // ============ Toast ============
+            let toastTimer;
+
+            function showToast(msg, type = '') {
+                clearTimeout(toastTimer);
+                $toast.textContent = msg;
+                $toast.className = 'toast ' + type + ' show';
+                toastTimer = setTimeout(() => {
+                    $toast.className = 'toast';
+                }, 1800);
+            }
+
+            // ============ 渲染 ============
+            function renderGrid() {
+                const todayIndex = getTodayIndex();
+                $grid.innerHTML = '';
+
+                for (let i = 0; i < TOTAL_DAYS; i++) {
+                    const dayDate = new Date(START_DATE);
+                    dayDate.setDate(dayDate.getDate() + i);
+                    const month = dayDate.getMonth() + 1;
+                    const day = dayDate.getDate();
+                    const dateLabel = `${month}/${day}`;
+                    const isChecked = checkinData[i];
+                    const isToday = (i === todayIndex);
+
+                    const el = document.createElement('div');
+                    el.className = 'checkin-day';
+                    if (isChecked) el.classList.add('checked');
+                    if (isToday) el.classList.add('today');
+                    el.dataset.index = i;
+                    el.innerHTML = `
+                <span class="day-num">${i + 1}</span>
+                <span class="day-icon">${isChecked ? '✅' : '·'}</span>
+              `;
+                    el.title = `${dateLabel} ${isChecked ? '✓ 已打卡' : '○ 未打卡'}${isToday ? ' (今天)' : ''}`;
+                    el.addEventListener('click', () => toggleDay(i));
+                    $grid.appendChild(el);
+                }
+
+                // 更新按钮状态
+                const canCheckToday = (todayIndex >= 0 && todayIndex < TOTAL_DAYS);
+                $btnCheckin.disabled = !canCheckToday;
+                if (!canCheckToday) {
+                    if (todayIndex >= TOTAL_DAYS) {
+                        $btnCheckin.textContent = '🎉 22天已全部解锁';
+                    } else if (todayIndex < 0) {
+                        $btnCheckin.textContent = '⏳ 5月13日开始';
+                    }
+                } else {
+                    const todayChecked = checkinData[todayIndex];
+                    $btnCheckin.textContent = todayChecked ? '✅ 已打卡（点击取消）' : '☀️ 今日打卡';
+                }
+            }
+
+            function updateStats() {
+                const done = countChecked();
+                const remain = TOTAL_DAYS - done;
+                const pct = Math.round((done / TOTAL_DAYS) * 100);
+
+                $doneCount.textContent = done;
+                $remainCount.textContent = remain;
+                $percentText.textContent = pct + '%';
+                $progressFill.style.width = pct + '%';
+                $gridSummary.textContent = `(${done}/${TOTAL_DAYS})`;
+
+                // 预估
+                const estTotalMileage = BASE_MILEAGE + (done * MILEAGE_PER_CHECKIN);
+                const estTotalDays = BASE_DAYS + done;
+                $estMileage.textContent = estTotalMileage + 'km';
+                $estDays.textContent = estTotalDays + '天';
+
+                // 状态判断
+                let statusText = '';
+                if (done >= TOTAL_DAYS) {
+                    statusText = '🎉 满分已稳！里程和天数均超额完成！';
+                } else if (estTotalDays >= TARGET_DAYS && estTotalMileage >= TARGET_MILEAGE) {
+                    statusText = '✅ 已达成满分门槛！继续保持！';
+                } else if (estTotalDays >= TARGET_DAYS && estTotalMileage < TARGET_MILEAGE) {
+                    statusText = '⚠️ 天数达标但里程不够，需要更多晨跑翻倍';
+                } else if (estTotalDays < TARGET_DAYS && estTotalMileage >= TARGET_MILEAGE) {
+                    statusText = '⚠️ 里程达标但天数不够，继续打卡凑天数';
+                } else {
+                    const needDays = TARGET_DAYS - estTotalDays;
+                    const needMileage = TARGET_MILEAGE - estTotalMileage;
+                    const needCheckinsForMileage = Math.ceil(needMileage / MILEAGE_PER_CHECKIN);
+                    const need = Math.max(needDays, needCheckinsForMileage);
+                    statusText = `还需约 <strong>${need}</strong> 次晨跑即可满分`;
+                }
+                $goalStatus.innerHTML = statusText;
+                $goalSummary.textContent = `${done}/${TOTAL_DAYS}天`;
+
+                // 里程碑高亮
+                [6, 12, 18, 22].forEach(m => {
+                    const el = document.getElementById('ms-' + m);
+                    if (el && done >= m) {
+                        el.classList.add('reached');
+                    }
+                });
+
+                // 庆祝动画
+                if (done === TOTAL_DAYS) {
+                    document.querySelector('.overview-card').classList.add('celebrate');
+                    setTimeout(() => document.querySelector('.overview-card').classList.remove('celebrate'),
+                    700);
+                }
+            }
+
+            function updateCountdown() {
+                const now = new Date();
+                const diff = DEADLINE - now;
+
+                if (diff <= 0) {
+                    $cdDays.textContent = '00';
+                    $cdHours.textContent = '00';
+                    $cdMins.textContent = '00';
+                    $cdSecs.textContent = '00';
+                    document.querySelector('.countdown-label').textContent = '⏰ 活动已截止';
+                    return;
+                }
+
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+                $cdDays.textContent = String(days).padStart(2, '0');
+                $cdHours.textContent = String(hours).padStart(2, '0');
+                $cdMins.textContent = String(mins).padStart(2, '0');
+                $cdSecs.textContent = String(secs).padStart(2, '0');
+                document.querySelector('.countdown-label').textContent = '⏳ 距离 6月7日 截止';
+            }
+
+            function renderAll() {
+                renderGrid();
+                updateStats();
+                updateCountdown();
+            }
+
+            // ============ 交互 ============
+            function toggleDay(index) {
+                const todayIndex = getTodayIndex();
+                // 只允许修改今天及之前的日期（不能预支未来）
+                if (index > todayIndex) {
+                    showToast('不能提前打卡未来日期哦~', '');
+                    return;
+                }
+                if (index < 0 || index >= TOTAL_DAYS) return;
+
+                checkinData[index] = !checkinData[index];
+                saveData(checkinData);
+                renderAll();
+
+                const dateObj = new Date(START_DATE);
+                dateObj.setDate(dateObj.getDate() + index);
+                const dateStr = `${dateObj.getMonth()+1}/${dateObj.getDate()}`;
+                if (checkinData[index]) {
+                    showToast(`✅ ${dateStr} 打卡成功！`, 'success');
+                } else {
+                    showToast(`↩️ ${dateStr} 已取消`, '');
+                }
+            }
+
+            function toggleToday() {
+                const todayIndex = getTodayIndex();
+                if (todayIndex < 0 || todayIndex >= TOTAL_DAYS) {
+                    showToast('当前不在打卡窗口内', '');
+                    return;
+                }
+                toggleDay(todayIndex);
+            }
+
+            function resetAll() {
+                if (confirm('确定要清空所有打卡记录吗？此操作不可恢复。')) {
+                    checkinData = new Array(TOTAL_DAYS).fill(false);
+                    saveData(checkinData);
+                    renderAll();
+                    showToast('已重置，从头再来！', '');
+                }
+            }
+
+            // 暴露给全局
+            window.toggleToday = toggleToday;
+            window.resetAll = resetAll;
+            window.toggleDay = toggleDay;
+
+            // ============ 初始化 ============
+            renderAll();
+            // 每秒更新倒计时
+            setInterval(updateCountdown, 1000);
+
+            // 每天0点自动刷新界面（日期跨天后 todayIndex 会变）
+            function scheduleMidnightRefresh() {
+                const now = new Date();
+                const midnight = new Date(now);
+                midnight.setDate(midnight.getDate() + 1);
+                midnight.setHours(0, 0, 5, 0); // 0:00:05 刷新
+                const msUntilMidnight = midnight - now;
+                setTimeout(() => {
+                    renderAll();
+                    scheduleMidnightRefresh();
+                }, msUntilMidnight);
+            }
+            scheduleMidnightRefresh();
+
+            console.log('🏃 22天晨跑打卡器已就绪');
+            console.log('📅 起始日期:', START_DATE.toLocaleDateString());
+            console.log('⏰ 截止日期:', DEADLINE.toLocaleString());
+            console.log('📊 当前打卡:', countChecked(), '/', TOTAL_DAYS);
+            console.log('💾 数据保存在 localStorage:', STORAGE_KEY);
+        })();
+    </script>
+</body>
+</html>
